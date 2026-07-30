@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.UserMapper">
+
+    <resultMap id="userRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.UserMapper$UserRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="nickname" javaType="string"/>
+            <arg column="avatar_url" javaType="string"/>
+            <arg column="bio" javaType="string"/>
+            <arg column="location" javaType="string"/>
+            <arg column="source" javaType="string"/>
+            <arg column="created_at" javaType="java.sql.Timestamp"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findAll" resultMap="userRow">
+        select id, nickname, avatar_url, bio, location, source, created_at
+        from users
+        order by created_at
+    </select>
+</mapper>

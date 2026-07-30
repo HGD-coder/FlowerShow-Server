@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.InteractionMapper">
+
+    <resultMap id="commentRef" type="com.github.hgdcoder.flowershow.persistence.mapper.social.InteractionMapper$CommentRef">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="content_id" javaType="string"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="contentStats" type="com.github.hgdcoder.flowershow.model.ContentStatsDto">
+        <constructor>
+            <arg column="content_id" javaType="string"/>
+            <arg column="like_count" javaType="_int"/>
+            <arg column="comment_count" javaType="_int"/>
+            <arg column="favorite_count" javaType="_int"/>
+            <arg column="share_count" javaType="_int"/>
+            <arg column="view_count" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
+    <select id="countContentById" resultType="long">
+        select count(*)
+        from content_items
+        where id = #{contentId}
+    </select>
+
+    <select id="countUserById" resultType="long">
+        select count(*)
+        from users
+        where id = #{userId}
+    </select>
+
+    <insert id="insertContentLike">
+        insert into content_likes (content_id, user_id)
+        values (#{contentId}, #{userId})
+    </insert>
+
+    <delete id="deleteContentLike">
+        delete from content_likes
+        where content_id = #{contentId} and user_id = #{userId}
+    </delete>
+
+    <update id="incrementContentLikeCount">
+        update content_stats
+        set like_count = like_count + 1
+        where content_id = #{contentId}
+    </update>
+
+    <update id="decrementContentLikeCount">
+        update content_stats
+        set like_count = case when like_count &gt; 0 then like_count - 1 else 0 end
+        where content_id = #{contentId}
+    </update>
+
+    <select id="lockUser" resultType="string">
+        select id
+        from users
+        where id = #{userId}
+        for update
+    </select>
+
+    <select id="countDefaultFavorite" resultType="long">
+        select count(*)
+        from collection_items item
+        join collections collection on collection.id = item.collection_id
+        where item.content_id = #{contentId}
+          and collection.user_id = #{userId}
+          and collection.is_default = true
+    </select>
+
+    <select id="findDefaultCollectionId" resultType="string">
+        select id
+        from collections
+        where user_id = #{userId} and is_default = true
+        order by created_at
+        limit 1
+    </select>
+
+    <insert id="insertDefaultCollection">
+        insert into collections (id, user_id, name, is_default)
+        values (#{collectionId}, #{userId}, 'Default Favorites', true)
+    </insert>
+
+    <insert id="insertCollectionItem">
+        insert into collection_items (collection_id, content_id)
+        values (#{collectionId}, #{contentId})
+    </insert>
+
+    <delete id="deleteDefaultCollectionItem">
+        delete from collection_items
+        where content_id = #{contentId}
+          and collection_id in (
+              select id
+              from collections
+              where user_id = #{userId} and is_default = true
+          )
+    </delete>
+
+    <update id="incrementContentFavoriteCount">
+        update content_stats
+        set favorite_count = favorite_count + 1
+        where content_id = #{contentId}
+    </update>
+
+    <update id="decrementContentFavoriteCount">
+        update content_stats
+        set favorite_count = case when favorite_count &gt; 0 then favorite_count - 1 else 0 end
+        where content_id = #{contentId}
+    </update>
+
+    <select id="findCommentRef" resultMap="commentRef">
+        select id, content_id
+        from comments
+        where id = #{commentId}
+    </select>
+
+    <insert id="insertCommentLike">
+        insert into comment_likes (comment_id, user_id)
+        values (#{commentId}, #{userId})
+    </insert>
+
+    <update id="incrementCommentLikeCount">
+        update comments
+        set like_count = like_count + 1
+        where id = #{commentId}
+    </update>
+
+    <select id="findContentStats" resultMap="contentStats">
+        select content_id, like_count, comment_count, favorite_count, share_count, view_count
+        from content_stats
+        where content_id = #{contentId}
+    </select>
+</mapper>

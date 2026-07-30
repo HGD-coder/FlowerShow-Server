@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.content.FollowingFeedMapper">
+
+    <resultMap id="feedKeyMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.content.FollowingFeedKey">
+        <constructor>
+            <idArg column="content_id" javaType="java.lang.String"/>
+            <arg column="publish_time" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findFeedKeys" resultMap="feedKeyMap">
+        select c.id as content_id,
+               coalesce(c.publish_time, 0) as publish_time
+        from content_items c
+        where c.status = 'published'
+          and c.visibility = 'public'
+          and exists (
+              select 1
+              from follows f
+              join users author on author.id = f.following_id
+              left join user_social_stats social on social.user_id = author.id
+              where f.follower_id = #{userId}
+                and f.following_id = c.author_user_id
+                and f.muted = false
+                and (
+                    exists (
+                        select 1
+                        from user_feed_entries feed_entry
+                        where feed_entry.user_id = f.follower_id
+                          and feed_entry.content_id = c.id
+                    )
+                    or author.fanout_mode = 'pull'
+                    or (
+                        author.fanout_mode = 'auto'
+                        and coalesce(social.follower_count, 0) &gt; #{fanoutOnWriteMaxFollowers}
+                    )
+                )
+          )
+        <if test="cursorSortValue != null">
+          and (
+              coalesce(c.publish_time, 0) &lt; #{cursorSortValue}
+              or (
+                  coalesce(c.publish_time, 0) = #{cursorSortValue}
+                  and c.id &lt; #{cursorId}
+              )
+          )
+        </if>
+        order by coalesce(c.publish_time, 0) desc, c.id desc
+        limit #{limit}
+    </select>
+
+    <select id="countUserById" resultType="long">
+        select count(*)
+        from users
+        where id = #{userId}
+    </select>
+</mapper>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.event.OutboxEventMapper">
+
+    <resultMap id="outboxEventRecordMap"
+               type="com.github.hgdcoder.flowershow.event.outbox.OutboxEventRecord">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="event_type" javaType="java.lang.String"/>
+            <arg column="aggregate_type" javaType="java.lang.String"/>
+            <arg column="aggregate_id" javaType="java.lang.String"/>
+            <arg column="partition_key" javaType="java.lang.String"/>
+            <arg column="schema_version" javaType="_int"/>
+            <arg column="payload_json" javaType="java.lang.String"/>
+            <arg column="occurred_at" javaType="java.sql.Timestamp"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insertEvent">
+        insert into outbox_events (
+            id, event_type, aggregate_type, aggregate_id, partition_key,
+            schema_version, payload_json, status
+        )
+        values (
+            #{id}, #{eventType}, #{aggregateType}, #{aggregateId}, #{partitionKey},
+            1, #{payloadJson}, 'pending'
+        )
+    </insert>
+
+    <select id="lockNextPendingEvent" resultMap="outboxEventRecordMap">
+        select id,
+               event_type,
+               aggregate_type,
+               aggregate_id,
+               coalesce(partition_key, aggregate_id) as partition_key,
+               schema_version,
+               payload_json,
+               occurred_at
+        from outbox_events
+        where status = 'pending'
+          and next_attempt_at &lt;= current_timestamp
+        order by created_at
+        limit 1
+        for update skip locked
+    </select>
+
+    <select id="findRetryCount" resultType="java.lang.Integer">
+        select retry_count
+        from outbox_events
+        where id = #{eventId}
+    </select>
+
+    <update id="markProcessed">
+        update outbox_events
+        set status = 'processed',
+            processed_at = current_timestamp,
+            claimed_at = null,
+            claimed_by = null,
+            last_error = null
+        where id = #{eventId}
+    </update>
+
+    <update id="markRetry">
+        update outbox_events
+        set status = #{status},
+            retry_count = #{retryCount},
+            next_attempt_at = #{nextAttemptAt},
+            last_error = #{lastError}
+        where id = #{eventId}
+    </update>
+</mapper>

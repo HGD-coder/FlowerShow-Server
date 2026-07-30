@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingMapper">
+
+    <select id="supportsVectorSearch" databaseId="postgresql" resultType="boolean">
+        select true
+    </select>
+
+    <select id="supportsVectorSearch" databaseId="h2" resultType="boolean">
+        select false
+    </select>
+
+    <select id="findContentSources"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$ContentSourceRow">
+        select id, title, description
+        from content_items
+        where status = 'published'
+          and visibility = 'public'
+          and type = 'video'
+        order by id
+    </select>
+
+    <select id="findWeightedInterests"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$WeightedInterestRow">
+        select actor_key, interest_key, weight
+        from recommendation_user_interests
+        where weight > 0
+        order by actor_key, weight desc, interest_key
+    </select>
+
+    <select id="findContentHashes"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$HashRow">
+        select content_id as id, source_hash
+        from content_embeddings
+        where model_key = #{model}
+    </select>
+
+    <select id="findSuggestionHashes"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$HashRow">
+        select suggestion_id as id, source_hash
+        from suggestion_embeddings
+        where model_key = #{model}
+    </select>
+
+    <select id="findUserInterestHashes"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$HashRow">
+        select actor_key as id, source_hash
+        from user_interest_embeddings
+        where model_key = #{model}
+    </select>
+
+    <delete id="deleteAllContentEmbeddings">
+        delete from content_embeddings
+        where model_key = #{model}
+    </delete>
+
+    <delete id="deleteMissingContentEmbeddings">
+        delete from content_embeddings
+        where model_key = #{model}
+          and content_id not in
+        <foreach collection="activeIds" item="activeId" open="(" separator="," close=")">
+            #{activeId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteAllSuggestionEmbeddings">
+        delete from suggestion_embeddings
+        where model_key = #{model}
+    </delete>
+
+    <delete id="deleteMissingSuggestionEmbeddings">
+        delete from suggestion_embeddings
+        where model_key = #{model}
+          and suggestion_id not in
+        <foreach collection="activeIds" item="activeId" open="(" separator="," close=")">
+            #{activeId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteAllUserInterestEmbeddings">
+        delete from user_interest_embeddings
+        where model_key = #{model}
+    </delete>
+
+    <delete id="deleteMissingUserInterestEmbeddings">
+        delete from user_interest_embeddings
+        where model_key = #{model}
+          and actor_key not in
+        <foreach collection="activeIds" item="activeId" open="(" separator="," close=")">
+            #{activeId}
+        </foreach>
+    </delete>
+
+    <insert id="upsertContent" databaseId="postgresql">
+        insert into content_embeddings (
+            content_id, model_key, source_hash, dimensions, embedding
+        ) values (
+            #{id}, #{model}, #{sourceHash}, #{dimensions},
+            cast(#{vector,typeHandler=com.github.hgdcoder.flowershow.persistence.mapper.recommendation.FloatVectorTypeHandler}
+                as vector)
+        )
+        on conflict (content_id, model_key) do update
+        set source_hash = excluded.source_hash,
+            dimensions = excluded.dimensions,
+            embedding = excluded.embedding,
+            updated_at = current_timestamp
+    </insert>
+
+    <insert id="upsertContent" databaseId="h2">
+        merge into content_embeddings (
+            content_id, model_key, source_hash, dimensions, embedding, updated_at
+        ) key (content_id, model_key) values (
+            #{id}, #{model}, #{sourceHash}, #{dimensions},
+            #{vector,typeHandler=com.github.hgdcoder.flowershow.persistence.mapper.recommendation.FloatVectorTypeHandler},
+            current_timestamp
+        )
+    </insert>
+
+    <insert id="upsertSuggestion" databaseId="postgresql">
+        insert into suggestion_embeddings (
+            suggestion_id, suggestion_text, model_key, source_hash,
+            dimensions, embedding
+        ) values (
+            #{id}, #{text}, #{model}, #{sourceHash}, #{dimensions},
+            cast(#{vector,typeHandler=com.github.hgdcoder.flowershow.persistence.mapper.recommendation.FloatVectorTypeHandler}
+                as vector)
+        )
+        on conflict (suggestion_id, model_key) do update
+        set suggestion_text = excluded.suggestion_text,
+            source_hash = excluded.source_hash,
+            dimensions = excluded.dimensions,
+            embedding = excluded.embedding,
+            updated_at = current_timestamp
+    </insert>
+
+    <insert id="upsertSuggestion" databaseId="h2">
+        merge into suggestion_embeddings (
+            suggestion_id, suggestion_text, model_key, source_hash,
+            dimensions, embedding, updated_at
+        ) key (suggestion_id, model_key) values (
+            #{id}, #{text}, #{model}, #{sourceHash}, #{dimensions},
+            #{vector,typeHandler=com.github.hgdcoder.flowershow.persistence.mapper.recommendation.FloatVectorTypeHandler},
+            current_timestamp
+        )
+    </insert>
+
+    <insert id="upsertUserInterest" databaseId="postgresql">
+        insert into user_interest_embeddings (
+            actor_key, model_key, source_hash, dimensions, embedding
+        ) values (
+            #{actorKey}, #{model}, #{sourceHash}, #{dimensions},
+            cast(#{vector,typeHandler=com.github.hgdcoder.flowershow.persistence.mapper.recommendation.FloatVectorTypeHandler}
+                as vector)
+        )
+        on conflict (actor_key, model_key) do update
+        set source_hash = excluded.source_hash,
+            dimensions = excluded.dimensions,
+            embedding = excluded.embedding,
+            updated_at = current_timestamp
+    </insert>
+
+    <insert id="upsertUserInterest" databaseId="h2">
+        merge into user_interest_embeddings (
+            actor_key, model_key, source_hash, dimensions, embedding, updated_at
+        ) key (actor_key, model_key) values (
+            #{actorKey}, #{model}, #{sourceHash}, #{dimensions},
+            #{vector,typeHandler=com.github.hgdcoder.flowershow.persistence.mapper.recommendation.FloatVectorTypeHandler},
+            current_timestamp
+        )
+    </insert>
+
+    <select id="searchContentScores" databaseId="postgresql"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$ScoreRow">
+        select ce.content_id as id,
+               1 - (ce.embedding &lt;=> query_vector.embedding) as similarity
+        from content_embeddings ce
+        join content_items c on c.id = ce.content_id
+        cross join (
+            select cast(
+                #{query,typeHandler=com.github.hgdcoder.flowershow.persistence.mapper.recommendation.FloatVectorTypeHandler}
+                as vector
+            ) as embedding
+        ) query_vector
+        where ce.model_key = #{model}
+          and ce.dimensions = #{dimensions}
+          and c.status = 'published'
+          and c.visibility = 'public'
+          and c.type = 'video'
+        order by ce.embedding &lt;=> query_vector.embedding, ce.content_id
+        limit #{limit}
+    </select>
+
+    <select id="searchContentScores" databaseId="h2"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$ScoreRow">
+        select cast(null as varchar) as id,
+               cast(null as double precision) as similarity
+        where 1 = 0
+    </select>
+
+    <select id="findPersonalizedContentScores" databaseId="postgresql"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$ScoreRow">
+        select ce.content_id as id,
+               1 - (ce.embedding &lt;=> ui.embedding) as similarity
+        from user_interest_embeddings ui
+        join content_embeddings ce
+          on ce.model_key = ui.model_key
+         and ce.dimensions = ui.dimensions
+        join content_items c on c.id = ce.content_id
+        where ui.actor_key = #{actorKey}
+          and ui.model_key = #{model}
+          and ui.dimensions = #{dimensions}
+          and c.status = 'published'
+          and c.visibility = 'public'
+          and c.type = 'video'
+        order by ce.embedding &lt;=> ui.embedding, ce.content_id
+        limit #{limit}
+    </select>
+
+    <select id="findPersonalizedContentScores" databaseId="h2"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$ScoreRow">
+        select cast(null as varchar) as id,
+               cast(null as double precision) as similarity
+        where 1 = 0
+    </select>
+
+    <select id="findPersonalizedSuggestionScores" databaseId="postgresql"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$ScoreRow">
+        select se.suggestion_id as id,
+               1 - (se.embedding &lt;=> ui.embedding) as similarity
+        from user_interest_embeddings ui
+        join suggestion_embeddings se
+          on se.model_key = ui.model_key
+         and se.dimensions = ui.dimensions
+        where ui.actor_key = #{actorKey}
+          and ui.model_key = #{model}
+          and ui.dimensions = #{dimensions}
+        order by se.embedding &lt;=> ui.embedding, se.suggestion_id
+        limit #{limit}
+    </select>
+
+    <select id="findPersonalizedSuggestionScores" databaseId="h2"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.EmbeddingRows$ScoreRow">
+        select cast(null as varchar) as id,
+               cast(null as double precision) as similarity
+        where 1 = 0
+    </select>
+</mapper>

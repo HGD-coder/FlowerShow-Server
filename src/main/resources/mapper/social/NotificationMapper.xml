@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.NotificationMapper">
+
+    <resultMap id="notificationRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.NotificationMapper$NotificationRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="receiver_user_id" javaType="string"/>
+            <arg column="actor_user_id" javaType="string"/>
+            <arg column="actor_nickname" javaType="string"/>
+            <arg column="actor_avatar_url" javaType="string"/>
+            <arg column="type" javaType="string"/>
+            <arg column="content_id" javaType="string"/>
+            <arg column="comment_id" javaType="string"/>
+            <arg column="message" javaType="string"/>
+            <arg column="read_at" javaType="java.sql.Timestamp"/>
+            <arg column="created_at" javaType="java.sql.Timestamp"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findPage" resultMap="notificationRow">
+        select n.id, n.receiver_user_id, n.actor_user_id,
+               actor.nickname as actor_nickname, actor.avatar_url as actor_avatar_url,
+               n.type, n.content_id, n.comment_id, n.message, n.read_at, n.created_at
+        from notifications n
+        left join users actor on actor.id = n.actor_user_id
+        where n.receiver_user_id = #{userId}
+        <if test="cursorCreatedAt != null">
+            and (
+                n.created_at &lt; #{cursorCreatedAt}
+                or (n.created_at = #{cursorCreatedAt} and n.id &lt; #{cursorId})
+            )
+        </if>
+        order by n.created_at desc, n.id desc
+        limit #{limit}
+    </select>
+
+    <select id="findUnreadCount" resultType="long">
+        select unread_count
+        from notification_unread_stats
+        where user_id = #{userId}
+    </select>
+
+    <update id="markRead">
+        update notifications
+        set read_at = #{readAt}, updated_at = current_timestamp
+        where id = #{notificationId}
+          and receiver_user_id = #{userId}
+          and read_at is null
+    </update>
+
+    <update id="decrementUnreadCount">
+        update notification_unread_stats
+        set unread_count = case when unread_count &gt; 0 then unread_count - 1 else 0 end,
+            updated_at = current_timestamp
+        where user_id = #{userId}
+    </update>
+
+    <update id="markAllRead">
+        update notifications
+        set read_at = current_timestamp, updated_at = current_timestamp
+        where receiver_user_id = #{userId} and read_at is null
+    </update>
+
+    <update id="resetUnreadCount">
+        update notification_unread_stats
+        set unread_count = 0, updated_at = current_timestamp
+        where user_id = #{userId}
+    </update>
+</mapper>

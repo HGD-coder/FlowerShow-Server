@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.event.EventNotificationMapper">
+
+    <select id="countByReceiverAndDedupeKey" resultType="_int">
+        select count(*)
+        from notifications
+        where receiver_user_id = #{receiverUserId}
+          and dedupe_key = #{dedupeKey}
+    </select>
+
+    <insert id="insertNotification">
+        insert into notifications (
+            id, receiver_user_id, actor_user_id, type, content_id, comment_id,
+            message, event_id, dedupe_key, payload_json
+        )
+        values (
+            #{id}, #{receiverUserId}, #{actorUserId}, #{type}, #{contentId}, #{commentId},
+            #{message}, #{eventId}, #{dedupeKey}, #{payloadJson}
+        )
+    </insert>
+
+    <update id="incrementUnreadCount">
+        update notification_unread_stats
+        set unread_count = unread_count + 1,
+            updated_at = current_timestamp
+        where user_id = #{receiverUserId}
+    </update>
+
+    <insert id="insertUnreadCountIfAbsent">
+        insert into notification_unread_stats (user_id, unread_count)
+        select #{receiverUserId}, 1
+        where not exists (
+            select 1
+            from notification_unread_stats
+            where user_id = #{receiverUserId}
+        )
+    </insert>
+
+    <select id="findEnabledDeviceIds" resultType="java.lang.String">
+        select id
+        from user_device_tokens
+        where user_id = #{receiverUserId}
+          and enabled = true
+    </select>
+
+    <insert id="insertDeliveryIfAbsent">
+        insert into notification_deliveries (id, notification_id, device_token_id)
+        select #{deliveryId}, #{notificationId}, #{deviceId}
+        where not exists (
+            select 1
+            from notification_deliveries
+            where notification_id = #{notificationId}
+              and device_token_id = #{deviceId}
+        )
+    </insert>
+</mapper>

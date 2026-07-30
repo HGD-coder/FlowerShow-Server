@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.event.DomainEventMapper">
+
+    <select id="findActiveConversationMemberUserIds" resultType="java.lang.String">
+        select user_id
+        from chat_conversation_members
+        where conversation_id = #{conversationId}
+          and member_state = 'active'
+    </select>
+
+    <select id="findCommentAuthorUserId" resultType="java.lang.String">
+        select user_id
+        from comments
+        where id = #{commentId}
+    </select>
+
+    <select id="findContentAuthorUserId" resultType="java.lang.String">
+        select author_user_id
+        from content_items
+        where id = #{contentId}
+    </select>
+</mapper>

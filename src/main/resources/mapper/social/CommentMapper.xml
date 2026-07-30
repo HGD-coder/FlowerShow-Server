@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.CommentMapper">
+
+    <resultMap id="commentRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.CommentMapper$CommentRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="content_id" javaType="string"/>
+            <arg column="user_id" javaType="string"/>
+            <arg column="nickname" javaType="string"/>
+            <arg column="avatar_url" javaType="string"/>
+            <arg column="parent_id" javaType="string"/>
+            <arg column="body" javaType="string"/>
+            <arg column="like_count" javaType="_int"/>
+            <arg column="created_at" javaType="java.sql.Timestamp"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="commentColumns">
+        c.id, c.content_id, c.user_id, u.nickname, u.avatar_url, c.parent_id,
+        c.body, c.like_count, c.created_at
+    </sql>
+
+    <select id="countContentById" resultType="long">
+        select count(*)
+        from content_items
+        where id = #{contentId}
+    </select>
+
+    <select id="countUserById" resultType="long">
+        select count(*)
+        from users
+        where id = #{userId}
+    </select>
+
+    <select id="countParentInContent" resultType="long">
+        select count(*)
+        from comments
+        where id = #{parentId} and content_id = #{contentId}
+    </select>
+
+    <select id="findVisibleByContentId" resultMap="commentRow">
+        select <include refid="commentColumns"/>
+        from comments c
+        join users u on u.id = c.user_id
+        where c.content_id = #{contentId} and c.status = 'visible'
+        order by c.created_at desc
+    </select>
+
+    <select id="findById" resultMap="commentRow">
+        select <include refid="commentColumns"/>
+        from comments c
+        join users u on u.id = c.user_id
+        where c.id = #{id}
+    </select>
+
+    <insert id="insertComment">
+        insert into comments (id, content_id, user_id, parent_id, body, source)
+        values (#{id}, #{contentId}, #{userId}, #{parentId}, #{body}, 'app')
+    </insert>
+
+    <update id="incrementContentCommentCount">
+        update content_stats
+        set comment_count = comment_count + 1
+        where content_id = #{contentId}
+    </update>
+</mapper>

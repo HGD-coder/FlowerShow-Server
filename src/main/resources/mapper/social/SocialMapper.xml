@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.SocialMapper">
+
+    <resultMap id="followPreferencesRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.SocialMapper$FollowPreferencesRow">
+        <constructor>
+            <arg column="following_id" javaType="string"/>
+            <arg column="notify_new_content" javaType="_boolean"/>
+            <arg column="muted" javaType="_boolean"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="relationRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.SocialMapper$RelationRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="handle" javaType="string"/>
+            <arg column="nickname" javaType="string"/>
+            <arg column="avatar_url" javaType="string"/>
+            <arg column="bio" javaType="string"/>
+            <arg column="location" javaType="string"/>
+            <arg column="follower_count" javaType="_long"/>
+            <arg column="following_count" javaType="_long"/>
+            <arg column="viewer_following" javaType="_boolean"/>
+            <arg column="viewer_followed_by" javaType="_boolean"/>
+        </constructor>
+    </resultMap>
+
+    <select id="countUserById" resultType="long">
+        select count(*)
+        from users
+        where id = #{userId}
+    </select>
+
+    <select id="lockUser" resultType="string">
+        select id
+        from users
+        where id = #{userId}
+        for update
+    </select>
+
+    <insert id="insertFollowIfAbsent">
+        insert into follows (follower_id, following_id, fanout_shard)
+        select #{followerId}, #{followingId}, #{fanoutShard}
+        where not exists (
+            select 1
+            from follows
+            where follower_id = #{followerId} and following_id = #{followingId}
+        )
+    </insert>
+
+    <delete id="deleteFollow">
+        delete from follows
+        where follower_id = #{followerId} and following_id = #{followingId}
+    </delete>
+
+    <delete id="deleteFeedEntries">
+        delete from user_feed_entries
+        where user_id = #{followerId} and author_user_id = #{followingId}
+    </delete>
+
+    <select id="findPreferences" resultMap="followPreferencesRow">
+        select following_id, notify_new_content, muted
+        from follows
+        where follower_id = #{followerId} and following_id = #{followingId}
+    </select>
+
+    <update id="updatePreferences">
+        update follows
+        set notify_new_content = #{notifyNewContent},
+            muted = #{muted},
+            updated_at = current_timestamp
+        where follower_id = #{followerId} and following_id = #{followingId}
+    </update>
+
+    <select id="findRelations" resultMap="relationRow">
+        select u.id, coalesce(u.handle, u.id) as handle, u.nickname, u.avatar_url,
+               u.bio, u.location,
+               coalesce(user_stats.follower_count, 0) as follower_count,
+               coalesce(user_stats.following_count, 0) as following_count,
+               exists (
+                   select 1
+                   from follows viewer_link
+                   where viewer_link.follower_id = #{viewerId}
+                     and viewer_link.following_id = u.id
+               ) as viewer_following,
+               exists (
+                   select 1
+                   from follows reverse_link
+                   where reverse_link.follower_id = u.id
+                     and reverse_link.following_id = #{viewerId}
+               ) as viewer_followed_by
+        from follows relation
+        <choose>
+            <when test="followerList">
+                join users u on u.id = relation.follower_id
+            </when>
+            <otherwise>
+                join users u on u.id = relation.following_id
+            </otherwise>
+        </choose>
+        left join user_social_stats user_stats on user_stats.user_id = u.id
+        <where>
+            <choose>
+                <when test="followerList">
+                    relation.following_id = #{userId}
+                </when>
+                <otherwise>
+                    relation.follower_id = #{userId}
+                </otherwise>
+            </choose>
+            <if test="keywordPattern != null">
+                and (
+                    lower(u.nickname) like #{keywordPattern}
+                    or lower(coalesce(u.handle, u.id)) like #{keywordPattern}
+                )
+            </if>
+        </where>
+        order by lower(u.nickname), u.id
+        limit #{limit} offset #{offset}
+    </select>
+
+    <select id="countRelations" resultType="long">
+        select count(*)
+        from follows relation
+        <choose>
+            <when test="followerList">
+                join users u on u.id = relation.follower_id
+            </when>
+            <otherwise>
+                join users u on u.id = relation.following_id
+            </otherwise>
+        </choose>
+        <where>
+            <choose>
+                <when test="followerList">
+                    relation.following_id = #{userId}
+                </when>
+                <otherwise>
+                    relation.follower_id = #{userId}
+                </otherwise>
+            </choose>
+            <if test="keywordPattern != null">
+                and (
+                    lower(u.nickname) like #{keywordPattern}
+                    or lower(coalesce(u.handle, u.id)) like #{keywordPattern}
+                )
+            </if>
+        </where>
+    </select>
+
+    <select id="countFollow" resultType="long">
+        select count(*)
+        from follows
+        where follower_id = #{followerId} and following_id = #{followingId}
+    </select>
+
+    <select id="findFollowerCount" resultType="long">
+        select follower_count
+        from user_social_stats
+        where user_id = #{userId}
+    </select>
+
+    <select id="findFollowingCount" resultType="long">
+        select following_count
+        from user_social_stats
+        where user_id = #{userId}
+    </select>
+
+    <insert id="insertSocialStatsIfAbsent">
+        insert into user_social_stats (user_id)
+        select #{userId}
+        where not exists (
+            select 1
+            from user_social_stats
+            where user_id = #{userId}
+        )
+    </insert>
+
+    <update id="incrementFollowingCount">
+        update user_social_stats
+        set following_count = following_count + 1, updated_at = current_timestamp
+        where user_id = #{userId}
+    </update>
+
+    <update id="incrementFollowerCount">
+        update user_social_stats
+        set follower_count = follower_count + 1, updated_at = current_timestamp
+        where user_id = #{userId}
+    </update>
+
+    <update id="decrementFollowingCount">
+        update user_social_stats
+        set following_count = case
+                when following_count &gt; 0 then following_count - 1
+                else 0
+            end,
+            updated_at = current_timestamp
+        where user_id = #{userId}
+    </update>
+
+    <update id="decrementFollowerCount">
+        update user_social_stats
+        set follower_count = case
+                when follower_count &gt; 0 then follower_count - 1
+                else 0
+            end,
+            updated_at = current_timestamp
+        where user_id = #{userId}
+    </update>
+
+    <insert id="backfillFeed">
+        insert into user_feed_entries (user_id, content_id, author_user_id, score)
+        select #{followerId}, c.id, c.author_user_id, coalesce(c.publish_time, 0)
+        from content_items c
+        where c.author_user_id = #{followingId}
+          and c.status = 'published'
+          and c.visibility = 'public'
+          and not exists (
+              select 1
+              from user_feed_entries existing
+              where existing.user_id = #{followerId} and existing.content_id = c.id
+          )
+        order by c.publish_time desc, c.id desc
+        limit #{limit}
+    </insert>
+</mapper>

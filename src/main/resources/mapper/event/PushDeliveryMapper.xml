@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.event.PushDeliveryMapper">
+
+    <resultMap id="pushDeliveryRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.event.PushDeliveryRow">
+        <constructor>
+            <arg column="delivery_id" javaType="java.lang.String"/>
+            <arg column="device_token_id" javaType="java.lang.String"/>
+            <arg column="push_provider" javaType="java.lang.String"/>
+            <arg column="recipient" javaType="java.lang.String"/>
+            <arg column="recipient_type" javaType="java.lang.String"/>
+            <arg column="notification_id" javaType="java.lang.String"/>
+            <arg column="type" javaType="java.lang.String"/>
+            <arg column="body" javaType="java.lang.String"/>
+            <arg column="actor_user_id" javaType="java.lang.String"/>
+            <arg column="content_id" javaType="java.lang.String"/>
+            <arg column="comment_id" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
+    <select id="lockAvailableDeliveries" resultMap="pushDeliveryRowMap">
+        select d.id as delivery_id,
+               d.device_token_id,
+               t.push_provider,
+               t.token as recipient,
+               t.recipient_type,
+               n.id as notification_id,
+               n.type,
+               n.message as body,
+               n.actor_user_id,
+               n.content_id,
+               n.comment_id,
+               d.attempt_count
+        from notification_deliveries d
+        join notifications n on n.id = d.notification_id
+        join user_device_tokens t on t.id = d.device_token_id
+        where (
+            (d.status in ('pending', 'retry') and d.next_attempt_at &lt;= #{now})
+            or
+            (d.status = 'processing' and d.claimed_at &lt;= #{claimDeadline})
+        )
+          and d.attempt_count &lt; #{maxAttempts}
+          and n.created_at &gt; #{expiryCutoff}
+          and t.enabled = true
+        order by d.next_attempt_at, d.created_at, d.id
+        limit #{batchSize}
+        for update skip locked
+    </select>
+
+    <update id="claimDelivery">
+        update notification_deliveries
+        set status = 'processing',
+            attempt_count = attempt_count + 1,
+            claimed_at = #{claimedAt},
+            claimed_by = #{claimOwner},
+            last_error = null
+        where id = #{deliveryId}
+          and (
+              status in ('pending', 'retry')
+              or (status = 'processing' and claimed_at &lt;= #{claimDeadline})
+          )
+    </update>
+
+    <update id="terminateDisabledRecipients">
+        update notification_deliveries
+        set status = 'dead',
+            claimed_at = null,
+            claimed_by = null,
+            last_error = #{lastError}
+        where status in ('pending', 'retry')
+          and exists (
+              select 1
+              from user_device_tokens
+              where user_device_tokens.id = notification_deliveries.device_token_id
+                and user_device_tokens.enabled = false
+          )
+    </update>
+
+    <update id="expireStaleClaims">
+        update notification_deliveries
+        set status = 'dead',
+            claimed_at = null,
+            claimed_by = null,
+            last_error = #{lastError}
+        where status = 'processing'
+          and claimed_at &lt;= #{claimDeadline}
+          and exists (
+              select 1
+              from notifications
+              where notifications.id = notification_deliveries.notification_id
+                and notifications.created_at &lt;= #{expiryCutoff}
+          )
+    </update>
+
+    <update id="terminateExhaustedStaleClaims">
+        update notification_deliveries
+        set status = 'dead',
+            claimed_at = null,
+            claimed_by = null,
+            last_error = #{lastError}
+        where status = 'processing'
+          and claimed_at &lt;= #{claimDeadline}
+          and attempt_count &gt;= #{maxAttempts}
+    </update>
+
+    <update id="expireQueuedDeliveries">
+        update notification_deliveries
+        set status = 'dead',
+            claimed_at = null,
+            claimed_by = null,
+            last_error = #{lastError}
+        where status in ('pending', 'retry')
+          and exists (
+              select 1
+              from notifications
+              where notifications.id = notification_deliveries.notification_id
+                and notifications.created_at &lt;= #{expiryCutoff}
+          )
+    </update>
+
+    <update id="terminateExhaustedQueuedDeliveries">
+        update notification_deliveries
+        set status = 'dead',
+            claimed_at = null,
+            claimed_by = null,
+            last_error = #{lastError}
+        where status in ('pending', 'retry')
+          and attempt_count &gt;= #{maxAttempts}
+    </update>
+
+    <update id="markDelivered">
+        update notification_deliveries
+        set status = 'delivered',
+            delivered_at = #{deliveredAt},
+            provider_message_id = #{providerMessageId},
+            claimed_at = null,
+            claimed_by = null,
+            last_error = null
+        where id = #{deliveryId}
+          and status = 'processing'
+          and claimed_by = #{claimOwner}
+    </update>
+
+    <update id="markRetryOrDead">
+        update notification_deliveries
+        set status = #{status},
+            next_attempt_at = #{nextAttemptAt},
+            claimed_at = null,
+            claimed_by = null,
+            provider_message_id = null,
+            last_error = #{lastError}
+        where id = #{deliveryId}
+          and status = 'processing'
+          and claimed_by = #{claimOwner}
+    </update>
+
+    <update id="markPermanentFailure">
+        update notification_deliveries
+        set status = 'dead',
+            claimed_at = null,
+            claimed_by = null,
+            provider_message_id = null,
+            last_error = #{lastError}
+        where id = #{deliveryId}
+          and status = 'processing'
+          and claimed_by = #{claimOwner}
+    </update>
+
+    <update id="disableDevice">
+        update user_device_tokens
+        set enabled = false
+        where id = #{deviceTokenId}
+    </update>
+
+    <update id="terminateOtherDeliveriesForInvalidDevice">
+        update notification_deliveries
+        set status = 'dead',
+            claimed_at = null,
+            claimed_by = null,
+            provider_message_id = null,
+            last_error = #{lastError}
+        where device_token_id = #{deviceTokenId}
+          and id &lt;&gt; #{deliveryId}
+          and (
+              status in ('pending', 'retry')
+              or (status = 'processing' and claimed_by = #{claimOwner})
+          )
+    </update>
+</mapper>

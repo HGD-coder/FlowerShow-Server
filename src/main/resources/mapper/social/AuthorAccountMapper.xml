@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.AuthorAccountMapper">
+
+    <resultMap id="authorRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.AuthorAccountMapper$AuthorRow">
+        <constructor>
+            <arg column="user_id" javaType="string"/>
+            <arg column="nickname" javaType="string"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="accountRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.AuthorAccountMapper$AccountRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="username" javaType="string"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="accountResultRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.AuthorAccountMapper$AccountResultRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="user_id" javaType="string"/>
+            <arg column="nickname" javaType="string"/>
+            <arg column="username" javaType="string"/>
+            <arg column="role" javaType="string"/>
+            <arg column="status" javaType="string"/>
+            <arg column="generated" javaType="_boolean"/>
+            <arg column="created_at" javaType="java.sql.Timestamp"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findContentAuthors" resultMap="authorRow">
+        select distinct u.id as user_id, u.nickname
+        from content_items c
+        join users u on u.id = c.author_user_id
+        order by u.id
+    </select>
+
+    <select id="findByUserId" resultMap="accountRow">
+        select id, username
+        from accounts
+        where user_id = #{userId}
+    </select>
+
+    <insert id="insertAccount">
+        insert into accounts (id, user_id, username, password_hash, role, status, generated)
+        values (#{id}, #{userId}, #{username}, #{passwordHash}, 'creator', 'active', true)
+    </insert>
+
+    <update id="updatePassword">
+        update accounts
+        set password_hash = #{passwordHash}, updated_at = #{updatedAt}
+        where id = #{accountId}
+    </update>
+
+    <select id="countByUsername" resultType="long">
+        select count(*)
+        from accounts
+        where username = #{username}
+    </select>
+
+    <select id="findAccountsForContentAuthors" resultMap="accountResultRow">
+        select a.id, a.user_id, u.nickname, a.username, a.role, a.status, a.generated, a.created_at
+        from accounts a
+        join users u on u.id = a.user_id
+        where exists (
+            select 1
+            from content_items c
+            where c.author_user_id = a.user_id
+        )
+        order by u.nickname, a.username
+    </select>
+</mapper>

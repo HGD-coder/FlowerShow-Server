@@ -1,0 +1,113 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: flower-show-server
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/flower_show}
+    username: ${DB_USERNAME:flower_show}
+    password: ${DB_PASSWORD:flower_show}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration,classpath:db/vendor/{vendor}
+  h2:
+    console:
+      enabled: false
+      path: /h2-console
+  jackson:
+    default-property-inclusion: non_null
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 120000
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:flower-show-server-v1}
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+    listener:
+      ack-mode: record
+      missing-topics-fatal: false
+
+flower-show:
+  auth:
+    jwt:
+      secret: ${JWT_SECRET:}
+      secret-file: ${JWT_SECRET_FILE:data/jwt-secret.local}
+      issuer: ${JWT_ISSUER:flower-show-server}
+      audience: ${JWT_AUDIENCE:flower-show-app}
+      access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+      refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:30d}
+  media:
+    public-base-url: ${MEDIA_PUBLIC_BASE_URL:}
+  upload:
+    root: uploads
+  chat:
+    websocket:
+      enabled: ${CHAT_WEBSOCKET_ENABLED:true}
+      port: ${CHAT_WEBSOCKET_PORT:8090}
+      path: ${CHAT_WEBSOCKET_PATH:/ws/chat}
+      idle-timeout: ${CHAT_WEBSOCKET_IDLE_TIMEOUT:60s}
+      max-frame-payload-length: ${CHAT_WEBSOCKET_MAX_FRAME_PAYLOAD_LENGTH:8192}
+  events:
+    publisher: outbox
+    outbox:
+      fixed-delay-ms: ${OUTBOX_FIXED_DELAY_MS:100}
+      initial-delay-ms: ${OUTBOX_INITIAL_DELAY_MS:100}
+      batch-size: ${OUTBOX_BATCH_SIZE:100}
+      max-retries: ${OUTBOX_MAX_RETRIES:10}
+  messaging:
+    local-dispatcher-enabled: ${LOCAL_EVENT_DISPATCHER_ENABLED:true}
+    kafka:
+      enabled: ${KAFKA_ENABLED:false}
+      domain-topic: ${KAFKA_DOMAIN_TOPIC:flower-show.domain-events.v1}
+      fanout-topic: ${KAFKA_FANOUT_TOPIC:flower-show.feed-fanout.v1}
+      partitions: ${KAFKA_TOPIC_PARTITIONS:12}
+      replicas: ${KAFKA_TOPIC_REPLICAS:1}
+      listener-concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+  feed:
+    fanout-on-write-max-followers: ${FANOUT_ON_WRITE_MAX_FOLLOWERS:100000}
+    fanout-chunk-size: ${FANOUT_CHUNK_SIZE:1000}
+    follow-backfill-size: ${FOLLOW_BACKFILL_SIZE:100}
+  recommendation:
+    session-ttl: ${RECOMMENDATION_SESSION_TTL:30m}
+    idempotency-ttl: ${RECOMMENDATION_IDEMPOTENCY_TTL:24h}
+    embedding:
+      enabled: ${EMBEDDING_ENABLED:false}
+      base-url: ${EMBEDDING_BASE_URL:http://localhost:11434}
+      model: ${EMBEDDING_MODEL:qwen3-embedding:0.6b}
+      dimensions: ${EMBEDDING_DIMENSIONS:1024}
+      batch-size: ${EMBEDDING_BATCH_SIZE:16}
+      candidate-limit: ${EMBEDDING_CANDIDATE_LIMIT:200}
+      minimum-similarity: ${EMBEDDING_MINIMUM_SIMILARITY:0.35}
+      connect-timeout: ${EMBEDDING_CONNECT_TIMEOUT:2s}
+      request-timeout: ${EMBEDDING_REQUEST_TIMEOUT:30s}
+      initial-delay: ${EMBEDDING_INITIAL_DELAY:10s}
+      refresh-interval: ${EMBEDDING_REFRESH_INTERVAL:10m}
+  push:
+    enabled: ${PUSH_ENABLED:false}
+    project-id: ${FIREBASE_PROJECT_ID:}
+    batch-size: ${PUSH_BATCH_SIZE:100}
+    schedule-interval: ${PUSH_SCHEDULE_INTERVAL:5s}
+    max-attempts: ${PUSH_MAX_ATTEMPTS:8}
+    base-backoff: ${PUSH_BASE_BACKOFF:5s}
+    max-backoff: ${PUSH_MAX_BACKOFF:15m}
+    claim-timeout: ${PUSH_CLAIM_TIMEOUT:2m}
+    message-max-age: ${PUSH_MESSAGE_MAX_AGE:24h}
+    android-channel-id: ${PUSH_ANDROID_CHANNEL_ID:flower_show_notifications}
+    notification-title: ${PUSH_NOTIFICATION_TITLE:Flower Show}
+
+mybatis:
+  mapper-locations: "classpath*:mapper/**/*.xml"
+  configuration:
+    map-underscore-to-camel-case: true

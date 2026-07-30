@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatMapper">
+
+    <resultMap id="conversationRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatConversationRow">
+        <constructor>
+            <arg column="id" javaType="java.lang.String" name="id"/>
+            <arg column="conversation_type" javaType="java.lang.String" name="type"/>
+            <arg column="name" javaType="java.lang.String" name="name"/>
+            <arg column="owner_user_id" javaType="java.lang.String" name="ownerUserId"/>
+            <arg column="direct_user_one_id" javaType="java.lang.String" name="directUserOneId"/>
+            <arg column="direct_user_two_id" javaType="java.lang.String" name="directUserTwoId"/>
+            <arg column="last_message_id" javaType="java.lang.String" name="lastMessageId"/>
+            <arg column="last_message_sequence" javaType="java.lang.Long"
+                 name="lastMessageSequence"/>
+            <arg column="conversation_state" javaType="java.lang.String" name="state"/>
+            <arg column="dissolved_at" javaType="java.time.Instant" name="dissolvedAt"/>
+            <arg column="dissolved_by_user_id" javaType="java.lang.String"
+                 name="dissolvedByUserId"/>
+            <arg column="created_at" javaType="java.time.Instant" name="createdAt"/>
+            <arg column="updated_at" javaType="java.time.Instant" name="updatedAt"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="conversationSummaryRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatConversationSummaryRow">
+        <constructor>
+            <arg column="id" javaType="java.lang.String" name="id"/>
+            <arg column="conversation_type" javaType="java.lang.String" name="type"/>
+            <arg column="name" javaType="java.lang.String" name="name"/>
+            <arg column="owner_user_id" javaType="java.lang.String" name="ownerUserId"/>
+            <arg column="conversation_state" javaType="java.lang.String" name="state"/>
+            <arg column="dissolved_at" javaType="java.time.Instant" name="dissolvedAt"/>
+            <arg column="updated_at" javaType="java.time.Instant" name="updatedAt"/>
+            <arg column="activity_at" javaType="java.time.Instant" name="activityAt"/>
+            <arg column="display_name" javaType="java.lang.String" name="displayName"/>
+            <arg column="display_avatar_url" javaType="java.lang.String"
+                 name="displayAvatarUrl"/>
+            <arg column="message_id" javaType="java.lang.String" name="messageId"/>
+            <arg column="message_conversation_id" javaType="java.lang.String"
+                 name="messageConversationId"/>
+            <arg column="message_sender_user_id" javaType="java.lang.String"
+                 name="messageSenderUserId"/>
+            <arg column="message_sender_nickname" javaType="java.lang.String"
+                 name="messageSenderNickname"/>
+            <arg column="message_sender_avatar_url" javaType="java.lang.String"
+                 name="messageSenderAvatarUrl"/>
+            <arg column="message_message_type" javaType="java.lang.String" name="messageType"/>
+            <arg column="message_body" javaType="java.lang.String" name="messageBody"/>
+            <arg column="message_shared_content_id" javaType="java.lang.String"
+                 name="messageSharedContentId"/>
+            <arg column="message_shared_content_title" javaType="java.lang.String"
+                 name="messageSharedContentTitle"/>
+            <arg column="message_shared_content_cover_url" javaType="java.lang.String"
+                 name="messageSharedContentCoverUrl"/>
+            <arg column="message_shared_content_author_user_id" javaType="java.lang.String"
+                 name="messageSharedContentAuthorUserId"/>
+            <arg column="message_shared_content_author_nickname" javaType="java.lang.String"
+                 name="messageSharedContentAuthorNickname"/>
+            <arg column="message_client_message_id" javaType="java.lang.String"
+                 name="messageClientMessageId"/>
+            <arg column="message_created_at" javaType="java.time.Instant"
+                 name="messageCreatedAt"/>
+            <arg column="unread_count" javaType="_long" name="unreadCount"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="memberDetailRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatMemberDetailRow">
+        <constructor>
+            <arg column="user_id" javaType="java.lang.String" name="userId"/>
+            <arg column="nickname" javaType="java.lang.String" name="nickname"/>
+            <arg column="avatar_url" javaType="java.lang.String" name="avatarUrl"/>
+            <arg column="member_role" javaType="java.lang.String" name="role"/>
+            <arg column="joined_at" javaType="java.time.Instant" name="joinedAt"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="avatarMemberRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatAvatarMemberRow">
+        <constructor>
+            <arg column="conversation_id" javaType="java.lang.String" name="conversationId"/>
+            <arg column="user_id" javaType="java.lang.String" name="userId"/>
+            <arg column="nickname" javaType="java.lang.String" name="nickname"/>
+            <arg column="avatar_url" javaType="java.lang.String" name="avatarUrl"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="memberStateRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatMemberStateRow">
+        <constructor>
+            <arg column="user_id" javaType="java.lang.String" name="userId"/>
+            <arg column="member_state" javaType="java.lang.String" name="state"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="membershipRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatMembershipRow">
+        <constructor>
+            <arg column="member_role" javaType="java.lang.String" name="role"/>
+            <arg column="member_state" javaType="java.lang.String" name="state"/>
+            <arg column="last_read_message_sequence" javaType="_long"
+                 name="lastReadSequence"/>
+            <arg column="last_read_at" javaType="java.time.Instant" name="lastReadAt"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="messageRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.chat.ChatMessageRow">
+        <constructor>
+            <arg column="id" javaType="java.lang.String" name="id"/>
+            <arg column="conversation_id" javaType="java.lang.String" name="conversationId"/>
+            <arg column="sender_user_id" javaType="java.lang.String" name="senderUserId"/>
+            <arg column="sender_nickname" javaType="java.lang.String" name="senderNickname"/>
+            <arg column="sender_avatar_url" javaType="java.lang.String"
+                 name="senderAvatarUrl"/>
+            <arg column="message_type" javaType="java.lang.String" name="messageType"/>
+            <arg column="body" javaType="java.lang.String" name="body"/>
+            <arg column="shared_content_id" javaType="java.lang.String" name="sharedContentId"/>
+            <arg column="shared_content_title" javaType="java.lang.String"
+                 name="sharedContentTitle"/>
+            <arg column="shared_content_cover_url" javaType="java.lang.String"
+                 name="sharedContentCoverUrl"/>
+            <arg column="shared_content_author_user_id" javaType="java.lang.String"
+                 name="sharedContentAuthorUserId"/>
+            <arg column="shared_content_author_nickname" javaType="java.lang.String"
+                 name="sharedContentAuthorNickname"/>
+            <arg column="client_message_id" javaType="java.lang.String"
+                 name="clientMessageId"/>
+            <arg column="created_at" javaType="java.time.Instant" name="createdAt"/>
+            <arg column="sequence_no" javaType="_long" name="sequence"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="messageColumns">
+        message.id,
+        message.conversation_id,
+        message.sender_user_id,
+        sender.nickname as sender_nickname,
+        sender.avatar_url as sender_avatar_url,
+        message.message_type,
+        message.body,
+        message.shared_content_id,
+        shared_content.title as shared_content_title,
+        shared_content.cover_url as shared_content_cover_url,
+        shared_content.author_user_id as shared_content_author_user_id,
+        shared_author.nickname as shared_content_author_nickname,
+        message.client_message_id,
+        message.created_at,
+        message.sequence_no
+    </sql>
+
+    <select id="findDirectConversationId" resultType="java.lang.String">
+        select id
+        from chat_conversations
+        where conversation_type = 'direct'
+          and direct_user_one_id = #{firstUserId}
+          and direct_user_two_id = #{secondUserId}
+    </select>
+
+    <insert id="insertDirectConversation">
+        insert into chat_conversations (
+            id, conversation_type, direct_user_one_id, direct_user_two_id
+        )
+        values (#{conversationId}, 'direct', #{firstUserId}, #{secondUserId})
+    </insert>
+
+    <insert id="insertGroupConversation">
+        insert into chat_conversations (
+            id, conversation_type, name, owner_user_id
+        )
+        values (#{conversationId}, 'group', #{name}, #{ownerUserId})
+    </insert>
+
+    <select id="findConversationSummaries" resultMap="conversationSummaryRowMap">
+        select c.id, c.conversation_type, c.name, c.owner_user_id,
+               c.conversation_state, c.dissolved_at, c.updated_at,
+               coalesce(c.last_message_at, c.created_at) as activity_at,
+               case
+                   when c.conversation_type = 'group' then c.name
+                   else (
+                       select peer_user.nickname
+                       from chat_conversation_members peer
+                       join users peer_user on peer_user.id = peer.user_id
+                       where peer.conversation_id = c.id
+                         and peer.member_state = 'active'
+                         and peer.user_id &lt;&gt; #{userId}
+                   )
+               end as display_name,
+               case
+                   when c.conversation_type = 'direct' then (
+                       select peer_user.avatar_url
+                       from chat_conversation_members peer
+                       join users peer_user on peer_user.id = peer.user_id
+                       where peer.conversation_id = c.id
+                         and peer.member_state = 'active'
+                         and peer.user_id &lt;&gt; #{userId}
+                   )
+                   else null
+               end as display_avatar_url,
+               lm.id as message_id,
+               lm.conversation_id as message_conversation_id,
+               lm.sender_user_id as message_sender_user_id,
+               message_sender.nickname as message_sender_nickname,
+               message_sender.avatar_url as message_sender_avatar_url,
+               lm.message_type as message_message_type,
+               lm.body as message_body,
+               lm.shared_content_id as message_shared_content_id,
+               message_content.title as message_shared_content_title,
+               message_content.cover_url as message_shared_content_cover_url,
+               message_content.author_user_id as message_shared_content_author_user_id,
+               message_author.nickname as message_shared_content_author_nickname,
+               lm.client_message_id as message_client_message_id,
+               lm.created_at as message_created_at,
+               (
+                   select count(*)
+                   from chat_messages unread
+                   where unread.conversation_id = c.id
+                     and unread.sequence_no &gt; membership.last_read_message_sequence
+                     and unread.sender_user_id &lt;&gt; #{userId}
+               ) as unread_count
+        from chat_conversation_members membership
+        join chat_conversations c on c.id = membership.conversation_id
+        left join chat_messages lm on lm.id = c.last_message_id
+        left join users message_sender on message_sender.id = lm.sender_user_id
+        left join content_items message_content
+          on message_content.id = lm.shared_content_id
+         and lm.message_type = 'video_share'
+        left join users message_author
+          on message_author.id = message_content.author_user_id
+        where membership.user_id = #{userId}
+          and membership.member_state = 'active'
+        <if test="cursorAt != null">
+          and (
+              coalesce(c.last_message_at, c.created_at) &lt; #{cursorAt}
+              or (
+                  coalesce(c.last_message_at, c.created_at) = #{cursorAt}
+                  and c.id &lt; #{cursorId}
+              )
+          )
+        </if>
+        order by coalesce(c.last_message_at, c.created_at) desc, c.id desc
+        limit #{limit}
+    </select>
+
+    <select id="findAvatarMembersByConversationIds" resultMap="avatarMemberRowMap">
+        select ranked.conversation_id,
+               ranked.user_id,
+               ranked.nickname,
+               ranked.avatar_url
+        from (
+            select membership.conversation_id,
+                   membership.user_id,
+                   member_user.nickname,
+                   member_user.avatar_url,
+                   row_number() over (
+                       partition by membership.conversation_id
+                       order by
+                           case when membership.user_id = conversation.owner_user_id then 0 else 1 end,
+                           membership.joined_at,
+                           membership.user_id
+                   ) as member_order
+            from chat_conversation_members membership
+            join chat_conversations conversation on conversation.id = membership.conversation_id
+            join users member_user on member_user.id = membership.user_id
+            where membership.member_state = 'active'
+              and conversation.conversation_type = 'group'
+              and membership.conversation_id in
+              <foreach collection="conversationIds" item="conversationId"
+                       open="(" separator="," close=")">
+                  #{conversationId}
+              </foreach>
+        ) ranked
+        where ranked.member_order &lt;= 4
+        order by ranked.conversation_id, ranked.member_order
+    </select>
+
+    <update id="renameGroup">
+        update chat_conversations
+        set name = #{name}, updated_at = current_timestamp
+        where id = #{conversationId}
+    </update>
+
+    <update id="updateMembershipRolesForTransfer">
+        update chat_conversation_members
+        set member_role = case
+            when user_id = #{previousOwnerUserId} then 'member'
+            else 'owner'
+        end
+        where conversation_id = #{conversationId}
+          and user_id in
+          <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+              #{userId}
+          </foreach>
+          and member_state = 'active'
+    </update>
+
+    <update id="updateConversationOwner">
+        update chat_conversations
+        set owner_user_id = #{ownerUserId}, updated_at = current_timestamp
+        where id = #{conversationId}
+    </update>
+
+    <update id="dissolveConversation">
+        update chat_conversations
+        set conversation_state = 'dissolved',
+            dissolved_at = current_timestamp,
+            dissolved_by_user_id = #{actorUserId},
+            updated_at = current_timestamp
+        where id = #{conversationId}
+          and conversation_state = 'active'
+    </update>
+
+    <update id="removeMember">
+        update chat_conversation_members
+        set member_state = 'removed', left_at = current_timestamp
+        where conversation_id = #{conversationId}
+          and user_id = #{userId}
+    </update>
+
+    <update id="leaveMember">
+        update chat_conversation_members
+        set member_state = 'left', left_at = current_timestamp
+        where conversation_id = #{conversationId}
+          and user_id = #{userId}
+          and member_state = 'active'
+    </update>
+
+    <select id="findMessages" resultMap="messageRowMap">
+        select
+        <include refid="messageColumns"/>
+        from chat_messages message
+        join users sender on sender.id = message.sender_user_id
+        left join content_items shared_content
+          on shared_content.id = message.shared_content_id
+         and message.message_type = 'video_share'
+        left join users shared_author
+          on shared_author.id = shared_content.author_user_id
+        where message.conversation_id = #{conversationId}
+        <if test="cursorSequence != null">
+          and (
+              message.sequence_no &lt; #{cursorSequence}
+              or (
+                  message.sequence_no = #{cursorSequence}
+                  and message.id &lt; #{cursorId}
+              )
+          )
+        </if>
+        order by message.sequence_no desc, message.id desc
+        limit #{limit}
+    </select>
+
+    <insert id="insertMessage">
+        insert into chat_messages (
+            id, conversation_id, sender_user_id, message_type,
+            body, shared_content_id, client_message_id
+        )
+        values (
+            #{messageId}, #{conversationId}, #{senderUserId}, #{messageType},
+            #{body}, #{sharedContentId}, #{clientMessageId}
+        )
+    </insert>
+
+    <update id="updateConversationLastMessage">
+        update chat_conversations
+        set last_message_id = #{messageId},
+            last_message_sequence = #{sequence},
+            last_message_at = #{createdAt},
+            updated_at = #{createdAt}
+        where id = #{conversationId}
+    </update>
+
+    <select id="findMessageSequence" resultType="java.lang.Long">
+        select sequence_no
+        from chat_messages
+        where id = #{messageId}
+          and conversation_id = #{conversationId}
+    </select>
+
+    <update id="updateReadReceipt">
+        update chat_conversation_members
+        set last_read_message_sequence = #{readSequence},
+            last_read_at = current_timestamp
+        where conversation_id = #{conversationId}
+          and user_id = #{userId}
+    </update>
+
+    <select id="findMessageIdBySequence" resultType="java.lang.String">
+        select id
+        from chat_messages
+        where conversation_id = #{conversationId}
+          and sequence_no = #{sequence}
+    </select>
+
+    <select id="findActiveMembers" resultMap="memberDetailRowMap">
+        select membership.user_id, users.nickname, users.avatar_url,
+               membership.member_role, membership.joined_at
+        from chat_conversation_members membership
+        join users on users.id = membership.user_id
+        where membership.conversation_id = #{conversationId}
+          and membership.member_state = 'active'
+        order by case when membership.member_role = 'owner' then 0 else 1 end,
+                 membership.joined_at,
+                 membership.user_id
+    </select>
+
+    <select id="findConversation" resultMap="conversationRowMap">
+        select id, conversation_type, name, owner_user_id,
+               direct_user_one_id, direct_user_two_id,
+               last_message_id, last_message_sequence,
+               conversation_state, dissolved_at, dissolved_by_user_id,
+               created_at, updated_at
+        from chat_conversations
+        where id = #{conversationId}
+        <if test="forUpdate">
+            for update
+        </if>
+    </select>
+
+    <select id="findMembership" resultMap="membershipRowMap">
+        select member_role, member_state, last_read_message_sequence, last_read_at
+        from chat_conversation_members
+        where conversation_id = #{conversationId}
+          and user_id = #{userId}
+        <if test="forUpdate">
+            for update
+        </if>
+    </select>
+
+    <update id="activateMember">
+        update chat_conversation_members
+        set member_role = 'member',
+            member_state = 'active',
+            last_read_message_sequence = #{lastReadSequence},
+            last_read_at = current_timestamp,
+            joined_at = current_timestamp,
+            left_at = null
+        where conversation_id = #{conversationId}
+          and user_id = #{userId}
+    </update>
+
+    <select id="findMemberStates" resultMap="memberStateRowMap">
+        select user_id, member_state
+        from chat_conversation_members
+        where conversation_id = #{conversationId}
+          and user_id in
+          <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+              #{userId}
+          </foreach>
+    </select>
+
+    <select id="countActiveMembers" resultType="long">
+        select count(*)
+        from chat_conversation_members
+        where conversation_id = #{conversationId}
+          and member_state = 'active'
+    </select>
+
+    <insert id="insertMember">
+        insert into chat_conversation_members (
+            conversation_id, user_id, member_role, last_read_message_sequence
+        )
+        values (#{conversationId}, #{userId}, #{role}, #{lastReadSequence})
+    </insert>
+
+    <select id="findByClientMessageId" resultMap="messageRowMap">
+        select
+        <include refid="messageColumns"/>
+        from chat_messages message
+        join users sender on sender.id = message.sender_user_id
+        left join content_items shared_content
+          on shared_content.id = message.shared_content_id
+         and message.message_type = 'video_share'
+        left join users shared_author
+          on shared_author.id = shared_content.author_user_id
+        where message.conversation_id = #{conversationId}
+          and message.sender_user_id = #{senderUserId}
+          and message.client_message_id = #{clientMessageId}
+    </select>
+
+    <select id="findMessageById" resultMap="messageRowMap">
+        select
+        <include refid="messageColumns"/>
+        from chat_messages message
+        join users sender on sender.id = message.sender_user_id
+        left join content_items shared_content
+          on shared_content.id = message.shared_content_id
+         and message.message_type = 'video_share'
+        left join users shared_author
+          on shared_author.id = shared_content.author_user_id
+        where message.id = #{messageId}
+    </select>
+
+    <select id="countShareableVideo" resultType="int">
+        select count(*)
+        from content_items
+        where id = #{contentId}
+          and type = 'video'
+          and status = 'published'
+          and visibility = 'public'
+    </select>
+
+    <select id="countMutualFollows" resultType="int">
+        select count(*)
+        from follows
+        where (follower_id = #{firstUserId} and following_id = #{secondUserId})
+           or (follower_id = #{secondUserId} and following_id = #{firstUserId})
+    </select>
+
+    <select id="lockUser" resultType="java.lang.String">
+        select id
+        from users
+        where id = #{userId}
+        for update
+    </select>
+
+    <select id="countUnreadMessages" resultType="long">
+        select count(*)
+        from chat_messages
+        where conversation_id = #{conversationId}
+          and sequence_no &gt; #{readSequence}
+          and sender_user_id &lt;&gt; #{userId}
+    </select>
+
+</mapper>

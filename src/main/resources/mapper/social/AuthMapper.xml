@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.AuthMapper">
+
+    <resultMap id="accountRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.AuthMapper$AccountRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="user_id" javaType="string"/>
+            <arg column="username" javaType="string"/>
+            <arg column="password_hash" javaType="string"/>
+            <arg column="role" javaType="string"/>
+            <arg column="status" javaType="string"/>
+            <arg column="failed_login_attempts" javaType="_int"/>
+            <arg column="locked_until" javaType="java.sql.Timestamp"/>
+            <arg column="nickname" javaType="string"/>
+            <arg column="avatar_url" javaType="string"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="refreshTokenRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.AuthMapper$RefreshTokenRow">
+        <constructor>
+            <arg column="refresh_id" javaType="string"/>
+            <arg column="expires_at" javaType="java.sql.Timestamp"/>
+            <arg column="revoked_at" javaType="java.sql.Timestamp"/>
+            <arg column="account_id" javaType="string"/>
+            <arg column="user_id" javaType="string"/>
+            <arg column="username" javaType="string"/>
+            <arg column="password_hash" javaType="string"/>
+            <arg column="role" javaType="string"/>
+            <arg column="status" javaType="string"/>
+            <arg column="failed_login_attempts" javaType="_int"/>
+            <arg column="locked_until" javaType="java.sql.Timestamp"/>
+            <arg column="nickname" javaType="string"/>
+            <arg column="avatar_url" javaType="string"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="accountColumns">
+        a.id, a.user_id, a.username, a.password_hash, a.role, a.status,
+        a.failed_login_attempts, a.locked_until, u.nickname, u.avatar_url
+    </sql>
+
+    <select id="countAccountsByUsername" resultType="long">
+        select count(*)
+        from accounts
+        where username = #{username}
+    </select>
+
+    <select id="countUsersByNormalizedHandle" resultType="long">
+        select count(*)
+        from users
+        where lower(coalesce(handle, id)) = #{handle}
+    </select>
+
+    <insert id="insertUser">
+        insert into users (id, handle, nickname, avatar_url, bio, source)
+        values (#{id}, #{handle}, #{nickname}, #{avatarUrl}, #{bio}, 'app')
+    </insert>
+
+    <insert id="insertAccount">
+        insert into accounts (id, user_id, username, password_hash, role, status, generated)
+        values (#{id}, #{userId}, #{username}, #{passwordHash}, 'user', 'active', false)
+    </insert>
+
+    <insert id="insertUserSocialStats">
+        insert into user_social_stats (user_id)
+        values (#{userId})
+    </insert>
+
+    <insert id="insertNotificationUnreadStats">
+        insert into notification_unread_stats (user_id)
+        values (#{userId})
+    </insert>
+
+    <select id="findAccountByUsername" resultMap="accountRow">
+        select <include refid="accountColumns"/>
+        from accounts a
+        join users u on u.id = a.user_id
+        where a.username = #{username}
+    </select>
+
+    <select id="findAccountByUserId" resultMap="accountRow">
+        select <include refid="accountColumns"/>
+        from accounts a
+        join users u on u.id = a.user_id
+        where a.user_id = #{userId}
+    </select>
+
+    <update id="updateLoginSuccess">
+        update accounts
+        set failed_login_attempts = 0,
+            locked_until = null,
+            last_login_at = #{now},
+            updated_at = #{now}
+        where id = #{accountId}
+    </update>
+
+    <update id="updateLoginFailure">
+        update accounts
+        set failed_login_attempts = #{failedLoginAttempts},
+            locked_until = #{lockedUntil},
+            updated_at = #{updatedAt}
+        where id = #{accountId}
+    </update>
+
+    <insert id="insertRefreshToken">
+        insert into auth_refresh_tokens (id, account_id, token_hash, expires_at)
+        values (#{id}, #{accountId}, #{tokenHash}, #{expiresAt})
+    </insert>
+
+    <select id="findRefreshToken" resultMap="refreshTokenRow">
+        select rt.id as refresh_id, rt.expires_at, rt.revoked_at,
+               a.id as account_id, a.user_id, a.username, a.password_hash, a.role, a.status,
+               a.failed_login_attempts, a.locked_until, u.nickname, u.avatar_url
+        from auth_refresh_tokens rt
+        join accounts a on a.id = rt.account_id
+        join users u on u.id = a.user_id
+        where rt.token_hash = #{tokenHash}
+    </select>
+
+    <update id="rotateRefreshToken">
+        update auth_refresh_tokens
+        set revoked_at = #{revokedAt}, replaced_by_token_id = #{replacementId}
+        where id = #{id} and revoked_at is null
+    </update>
+
+    <update id="revokeRefreshToken">
+        update auth_refresh_tokens rt
+        set revoked_at = current_timestamp
+        where rt.token_hash = #{tokenHash}
+          and rt.revoked_at is null
+          and exists (
+              select 1
+              from accounts a
+              where a.id = rt.account_id and a.user_id = #{userId}
+          )
+    </update>
+
+    <update id="revokeAllRefreshTokens">
+        update auth_refresh_tokens rt
+        set revoked_at = current_timestamp
+        where rt.revoked_at is null
+          and exists (
+              select 1
+              from accounts a
+              where a.id = rt.account_id and a.user_id = #{userId}
+          )
+    </update>
+</mapper>

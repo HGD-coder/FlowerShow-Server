@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.DeviceTokenMapper">
+
+    <resultMap id="existingDevice" type="com.github.hgdcoder.flowershow.persistence.mapper.social.DeviceTokenMapper$ExistingDevice">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="user_id" javaType="string"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="deviceTokenRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.DeviceTokenMapper$DeviceTokenRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="platform" javaType="string"/>
+            <arg column="device_name" javaType="string"/>
+            <arg column="recipient_type" javaType="string"/>
+            <arg column="push_provider" javaType="string"/>
+            <arg column="device_brand" javaType="string"/>
+            <arg column="app_package" javaType="string"/>
+            <arg column="enabled" javaType="_boolean"/>
+            <arg column="last_seen_at" javaType="java.sql.Timestamp"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="deviceTokenColumns">
+        id, platform, device_name, recipient_type, push_provider,
+        device_brand, app_package, enabled, last_seen_at
+    </sql>
+
+    <select id="findExisting" resultMap="existingDevice">
+        select id, user_id
+        from user_device_tokens
+        where push_provider = #{pushProvider} and token = #{token}
+    </select>
+
+    <insert id="insertDevice">
+        insert into user_device_tokens (
+            id, user_id, token, platform, device_name, recipient_type,
+            push_provider, device_brand, app_package, enabled
+        )
+        values (
+            #{id}, #{userId}, #{token}, #{platform}, #{deviceName}, #{recipientType},
+            #{pushProvider}, #{deviceBrand}, #{appPackage}, true
+        )
+    </insert>
+
+    <delete id="deletePendingDeliveries">
+        delete from notification_deliveries
+        where device_token_id = #{deviceId} and status in ('pending', 'retry')
+    </delete>
+
+    <update id="updateDevice">
+        update user_device_tokens
+        set user_id = #{userId},
+            platform = #{platform},
+            device_name = #{deviceName},
+            recipient_type = #{recipientType},
+            device_brand = #{deviceBrand},
+            app_package = #{appPackage},
+            enabled = true,
+            last_seen_at = current_timestamp
+        where id = #{id}
+    </update>
+
+    <select id="findByUserId" resultMap="deviceTokenRow">
+        select <include refid="deviceTokenColumns"/>
+        from user_device_tokens
+        where user_id = #{userId}
+        order by last_seen_at desc, id
+    </select>
+
+    <update id="disable">
+        update user_device_tokens
+        set enabled = false, last_seen_at = current_timestamp
+        where id = #{deviceId} and user_id = #{userId} and enabled = true
+    </update>
+
+    <select id="findById" resultMap="deviceTokenRow">
+        select <include refid="deviceTokenColumns"/>
+        from user_device_tokens
+        where id = #{id} and user_id = #{userId}
+    </select>
+</mapper>

@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationMapper">
+
+    <sql id="eligibleVideoColumns">
+        c.id, c.title, c.author_user_id, c.cover_url, c.source_url, c.publish_time,
+        u.nickname, u.avatar_url, u.source_user_id, u.location,
+        s.like_count, s.comment_count, s.favorite_count, s.share_count, s.view_count
+    </sql>
+
+    <sql id="eligibleVideoJoinsAndFilter">
+        from content_items c
+        join users u on u.id = c.author_user_id
+        join content_stats s on s.content_id = c.id
+        where c.status = 'published'
+          and c.visibility = 'public'
+          and c.type = 'video'
+    </sql>
+
+    <select id="findEligibleVideos"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$VideoRow">
+        select
+        <include refid="eligibleVideoColumns"/>
+        <include refid="eligibleVideoJoinsAndFilter"/>
+        order by c.publish_time desc, c.id
+        limit #{limit}
+    </select>
+
+    <select id="findEligibleVideosByIds"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$VideoRow">
+        select
+        <include refid="eligibleVideoColumns"/>
+        <include refid="eligibleVideoJoinsAndFilter"/>
+          and c.id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+        order by c.publish_time desc, c.id
+    </select>
+
+    <select id="findInterests"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$InterestRow">
+        select interest_key, weight
+        from recommendation_user_interests
+        where actor_key = #{actorKey}
+    </select>
+
+    <select id="findRecommendationWordSuggestionSignals"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$SuggestionSignalRow">
+        select t.content_id, t.word as term,
+               s.like_count, s.favorite_count, s.share_count, s.view_count
+        from content_recommend_words t
+        join content_items c on c.id = t.content_id
+        join content_stats s on s.content_id = c.id
+        where c.status = 'published'
+          and c.visibility = 'public'
+          and c.type = 'video'
+    </select>
+
+    <select id="findTagSuggestionSignals"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$SuggestionSignalRow">
+        select t.content_id, t.tag as term,
+               s.like_count, s.favorite_count, s.share_count, s.view_count
+        from content_tags t
+        join content_items c on c.id = t.content_id
+        join content_stats s on s.content_id = c.id
+        where c.status = 'published'
+          and c.visibility = 'public'
+          and c.type = 'video'
+    </select>
+
+    <select id="findTags" resultType="java.lang.String">
+        select tag
+        from content_tags
+        where content_id = #{contentId}
+        order by sort_order
+    </select>
+
+    <select id="findRecommendationWords" resultType="java.lang.String">
+        select word
+        from content_recommend_words
+        where content_id = #{contentId}
+        order by sort_order
+    </select>
+
+    <insert id="insertSession">
+        insert into recommendation_serve_sessions (
+            id, actor_key, kind, query_hash, snapshot_json, created_at, expires_at
+        ) values (
+            #{id}, #{actorKey}, #{kind}, #{queryHash}, #{snapshotJson}, #{createdAt}, #{expiresAt}
+        )
+    </insert>
+
+    <select id="findSession"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$SessionRow">
+        select id, actor_key, kind, query_hash, snapshot_json, created_at, expires_at
+        from recommendation_serve_sessions
+        where id = #{sessionId}
+    </select>
+
+    <select id="findClientRequest"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$StoredRequestRow">
+        select request_hash, response_status, response_json, expires_at
+        from recommendation_client_requests
+        where actor_key = #{actorKey}
+          and endpoint = #{endpoint}
+          and client_request_id = #{clientRequestId}
+    </select>
+
+    <insert id="claimClientRequest" databaseId="postgresql">
+        insert into recommendation_client_requests (
+            actor_key, endpoint, client_request_id, request_hash,
+            response_status, response_json, expires_at
+        ) values (
+            #{actorKey}, #{endpoint}, #{clientRequestId}, #{requestHash},
+            0, '', #{expiresAt}
+        )
+        on conflict (actor_key, endpoint, client_request_id) do nothing
+    </insert>
+
+    <insert id="claimClientRequest" databaseId="h2">
+        merge into recommendation_client_requests target
+        using (values (
+            #{actorKey}, #{endpoint}, #{clientRequestId}, #{requestHash}, #{expiresAt}
+        )) source(actor_key, endpoint, client_request_id, request_hash, expires_at)
+        on target.actor_key = source.actor_key
+           and target.endpoint = source.endpoint
+           and target.client_request_id = source.client_request_id
+        when not matched then
+            insert (
+                actor_key, endpoint, client_request_id, request_hash,
+                response_status, response_json, expires_at
+            )
+            values (
+                source.actor_key, source.endpoint, source.client_request_id,
+                source.request_hash, 0, '', source.expires_at
+            )
+    </insert>
+
+    <delete id="deleteExpiredClientRequest">
+        delete from recommendation_client_requests
+        where actor_key = #{actorKey}
+          and endpoint = #{endpoint}
+          and client_request_id = #{clientRequestId}
+          and expires_at &lt;= #{now}
+    </delete>
+
+    <update id="completeClientRequest">
+        update recommendation_client_requests
+        set response_status = #{status},
+            response_json = #{responseJson}
+        where actor_key = #{actorKey}
+          and endpoint = #{endpoint}
+          and client_request_id = #{clientRequestId}
+    </update>
+
+    <select id="findEvent"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$StoredEventRow">
+        select event_fingerprint
+        from recommendation_client_events
+        where actor_key = #{actorKey}
+          and event_id = #{eventId}
+    </select>
+
+    <insert id="insertEvent" databaseId="postgresql">
+        insert into recommendation_client_events (
+            actor_key, event_id, event_fingerprint, event_type,
+            entity_id, serve_session_id, occurred_at_ms
+        ) values (
+            #{actorKey}, #{eventId}, #{fingerprint}, #{type},
+            #{entityId}, #{sessionId}, #{occurredAtMs}
+        )
+        on conflict (actor_key, event_id) do nothing
+    </insert>
+
+    <insert id="insertEvent" databaseId="h2">
+        merge into recommendation_client_events target
+        using (values (
+            #{actorKey}, #{eventId}, #{fingerprint}, #{type},
+            #{entityId}, #{sessionId}, #{occurredAtMs}
+        )) source(
+            actor_key, event_id, event_fingerprint, event_type,
+            entity_id, serve_session_id, occurred_at_ms
+        )
+        on target.actor_key = source.actor_key
+           and target.event_id = source.event_id
+        when not matched then
+            insert (
+                actor_key, event_id, event_fingerprint, event_type,
+                entity_id, serve_session_id, occurred_at_ms
+            )
+            values (
+                source.actor_key, source.event_id, source.event_fingerprint,
+                source.event_type, source.entity_id, source.serve_session_id,
+                source.occurred_at_ms
+            )
+    </insert>
+
+    <update id="incrementInterest">
+        update recommendation_user_interests
+        set weight = weight + #{delta},
+            updated_at = current_timestamp
+        where actor_key = #{actorKey}
+          and interest_key = #{interestKey}
+    </update>
+
+    <insert id="insertInterest" databaseId="postgresql">
+        insert into recommendation_user_interests (
+            actor_key, interest_key, weight
+        ) values (
+            #{actorKey}, #{interestKey}, #{weight}
+        )
+        on conflict (actor_key, interest_key) do nothing
+    </insert>
+
+    <insert id="insertInterest" databaseId="h2">
+        merge into recommendation_user_interests target
+        using (values (
+            #{actorKey}, #{interestKey}, #{weight}
+        )) source(actor_key, interest_key, weight)
+        on target.actor_key = source.actor_key
+           and target.interest_key = source.interest_key
+        when not matched then
+            insert (actor_key, interest_key, weight)
+            values (source.actor_key, source.interest_key, source.weight)
+    </insert>
+
+    <select id="findViewerState"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$ViewerStateRow">
+        select
+            case when exists (
+                select 1
+                from content_likes
+                where content_id = #{contentId}
+                  and user_id = #{viewerUserId}
+            ) then true else false end as liked,
+            case when exists (
+                select 1
+                from collection_items ci
+                join collections c on c.id = ci.collection_id
+                where ci.content_id = #{contentId}
+                  and c.user_id = #{viewerUserId}
+            ) then true else false end as favorited
+    </select>
+
+    <select id="findFirstProgressiveVideoAsset"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$MediaAssetRow">
+        select url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind = 'video'
+          and coalesce(delivery_type, 'progressive') = 'progressive'
+        order by sort_order
+        limit 1
+    </select>
+
+    <select id="findFirstAsset"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$MediaAssetRow">
+        select url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind = #{kind}
+        order by sort_order
+        limit 1
+    </select>
+
+    <select id="findHlsVideoAsset"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$MediaAssetRow">
+        select url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind = 'video'
+          and delivery_type = 'hls'
+        order by case when quality = 'auto' then 0 else 1 end, sort_order
+        limit 1
+    </select>
+
+    <select id="findProgressiveVideoQualities"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$QualityAssetRow">
+        select quality, url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind = 'video'
+          and quality is not null
+          and coalesce(delivery_type, 'progressive') = 'progressive'
+        order by sort_order
+    </select>
+</mapper>

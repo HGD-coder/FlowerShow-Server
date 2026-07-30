@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.social.ProfileMapper">
+
+    <resultMap id="profileRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.ProfileMapper$ProfileRow">
+        <constructor>
+            <arg column="id" javaType="string"/>
+            <arg column="handle" javaType="string"/>
+            <arg column="nickname" javaType="string"/>
+            <arg column="avatar_url" javaType="string"/>
+            <arg column="profile_banner_url" javaType="string"/>
+            <arg column="bio" javaType="string"/>
+            <arg column="location" javaType="string"/>
+            <arg column="source" javaType="string"/>
+            <arg column="profile_visibility" javaType="string"/>
+            <arg column="show_liked_on_profile" javaType="_boolean"/>
+            <arg column="show_favorites_on_profile" javaType="_boolean"/>
+            <arg column="created_at" javaType="java.sql.Timestamp"/>
+            <arg column="updated_at" javaType="java.sql.Timestamp"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="contentDisplayRow" type="com.github.hgdcoder.flowershow.persistence.mapper.social.ProfileMapper$ContentDisplayRow">
+        <constructor>
+            <arg column="author_user_id" javaType="string"/>
+            <arg column="show_on_profile" javaType="_boolean"/>
+            <arg column="profile_pinned_at" javaType="java.sql.Timestamp"/>
+            <arg column="profile_sort_order" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findProfileById" resultMap="profileRow">
+        select id, coalesce(handle, id) as handle, nickname, avatar_url,
+               profile_banner_url, bio, location, source, profile_visibility,
+               show_liked_on_profile, show_favorites_on_profile, created_at, updated_at
+        from users
+        where id = #{userId}
+    </select>
+
+    <select id="findContentDisplayById" resultMap="contentDisplayRow">
+        select author_user_id, show_on_profile, profile_pinned_at, profile_sort_order
+        from content_items
+        where id = #{contentId}
+    </select>
+
+    <select id="countFollow" resultType="long">
+        select count(*)
+        from follows
+        where follower_id = #{followerId} and following_id = #{followingId}
+    </select>
+
+    <select id="countReceivedLikesForOwner" resultType="long">
+        select coalesce(sum(s.like_count), 0)
+        from content_items c
+        join content_stats s on s.content_id = c.id
+        where c.author_user_id = #{userId} and c.status = 'published'
+    </select>
+
+    <select id="countReceivedLikesForPublicProfile" resultType="long">
+        select coalesce(sum(s.like_count), 0)
+        from content_items c
+        join content_stats s on s.content_id = c.id
+        where c.author_user_id = #{userId}
+          and c.status = 'published'
+          and c.visibility = 'public'
+          and c.show_on_profile = true
+    </select>
+
+    <select id="findFollowingCount" resultType="long">
+        select following_count
+        from user_social_stats
+        where user_id = #{userId}
+    </select>
+
+    <select id="findFollowerCount" resultType="long">
+        select follower_count
+        from user_social_stats
+        where user_id = #{userId}
+    </select>
+
+    <update id="updateProfile">
+        update users
+        set handle = #{handle},
+            nickname = #{nickname},
+            avatar_url = #{avatarUrl},
+            profile_banner_url = #{profileBannerUrl},
+            bio = #{bio},
+            location = #{location},
+            profile_visibility = #{profileVisibility},
+            show_liked_on_profile = #{showLikedOnProfile},
+            show_favorites_on_profile = #{showFavoritesOnProfile},
+            updated_at = current_timestamp
+        where id = #{userId}
+    </update>
+
+    <update id="updateContentDisplay">
+        update content_items
+        set show_on_profile = #{showOnProfile},
+            profile_pinned_at = #{pinnedAt},
+            profile_sort_order = #{sortOrder}
+        where id = #{contentId}
+    </update>
+</mapper>

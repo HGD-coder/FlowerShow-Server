@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.content.MediaCrawlerImportMapper">
+
+    <select id="countUserById" resultType="long">
+        select count(*)
+        from users
+        where id = #{userId}
+    </select>
+
+    <select id="countContentById" resultType="long">
+        select count(*)
+        from content_items
+        where id = #{contentId}
+    </select>
+
+    <select id="countContentStatsById" resultType="long">
+        select count(*)
+        from content_stats
+        where content_id = #{contentId}
+    </select>
+
+    <select id="countVideoAssets" resultType="long">
+        select count(*)
+        from media_assets
+        where content_id = #{contentId}
+          and kind = 'video'
+    </select>
+
+    <update id="updateUser">
+        update users
+        set nickname = #{user.nickname},
+            avatar_url = #{user.avatarUrl},
+            bio = #{user.bio},
+            location = #{user.location},
+            source = 'crawler',
+            source_user_id = #{user.sourceUserId}
+        where id = #{user.id}
+    </update>
+
+    <insert id="insertUser">
+        insert into users (
+            id,
+            nickname,
+            avatar_url,
+            bio,
+            location,
+            source,
+            source_user_id
+        ) values (
+            #{user.id},
+            #{user.nickname},
+            #{user.avatarUrl},
+            #{user.bio},
+            #{user.location},
+            'crawler',
+            #{user.sourceUserId}
+        )
+    </insert>
+
+    <insert id="insertUserSocialStats">
+        insert into user_social_stats (user_id)
+        values (#{userId})
+    </insert>
+
+    <insert id="insertNotificationUnreadStats">
+        insert into notification_unread_stats (user_id)
+        values (#{userId})
+    </insert>
+
+    <update id="updateContent">
+        update content_items
+        set type = #{content.type},
+            title = #{content.title},
+            description = #{content.description},
+            author_user_id = #{content.authorUserId},
+            cover_url = #{content.coverUrl},
+            source_url = #{content.sourceUrl},
+            status = 'published',
+            visibility = 'public',
+            publish_time = #{content.publishTime},
+            raw_json = #{content.rawJson}
+        where id = #{content.id}
+    </update>
+
+    <insert id="insertContent">
+        insert into content_items (
+            id,
+            type,
+            title,
+            description,
+            author_user_id,
+            cover_url,
+            source_url,
+            status,
+            visibility,
+            publish_time,
+            raw_json
+        ) values (
+            #{content.id},
+            #{content.type},
+            #{content.title},
+            #{content.description},
+            #{content.authorUserId},
+            #{content.coverUrl},
+            #{content.sourceUrl},
+            'published',
+            'public',
+            #{content.publishTime},
+            #{content.rawJson}
+        )
+    </insert>
+
+    <update id="updateContentStats">
+        update content_stats
+        set like_count = #{stats.likeCount},
+            comment_count = #{stats.commentCount},
+            favorite_count = #{stats.favoriteCount},
+            share_count = #{stats.shareCount}
+        where content_id = #{stats.contentId}
+    </update>
+
+    <insert id="insertContentStats">
+        insert into content_stats (
+            content_id,
+            like_count,
+            comment_count,
+            favorite_count,
+            share_count
+        ) values (
+            #{stats.contentId},
+            #{stats.likeCount},
+            #{stats.commentCount},
+            #{stats.favoriteCount},
+            #{stats.shareCount}
+        )
+    </insert>
+
+    <delete id="deleteTags">
+        delete from content_tags
+        where content_id = #{contentId}
+    </delete>
+
+    <insert id="insertTag">
+        insert into content_tags (content_id, tag, sort_order)
+        values (#{contentId}, #{tag}, #{sortOrder})
+    </insert>
+
+    <delete id="deleteRecommendWords">
+        delete from content_recommend_words
+        where content_id = #{contentId}
+    </delete>
+
+    <insert id="insertRecommendWord">
+        insert into content_recommend_words (content_id, word, sort_order)
+        values (#{contentId}, #{word}, #{sortOrder})
+    </insert>
+
+    <delete id="deleteNonHlsMediaAssets">
+        delete from media_assets
+        where content_id = #{contentId}
+          and coalesce(delivery_type, 'progressive') &lt;&gt; 'hls'
+    </delete>
+
+    <delete id="deleteMediaAssets">
+        delete from media_assets
+        where content_id = #{contentId}
+    </delete>
+
+    <insert id="insertMediaAsset">
+        insert into media_assets (
+            content_id,
+            kind,
+            url,
+            storage_key,
+            quality,
+            sort_order,
+            delivery_type,
+            container_format
+        ) values (
+            #{asset.contentId},
+            #{asset.kind},
+            #{asset.url},
+            #{asset.storageKey},
+            #{asset.quality},
+            #{asset.sortOrder},
+            #{asset.deliveryType},
+            #{asset.containerFormat}
+        )
+    </insert>
+</mapper>

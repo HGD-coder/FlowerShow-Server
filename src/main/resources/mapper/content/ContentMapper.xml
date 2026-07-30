@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMapper">
+
+    <resultMap id="contentRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.content.ContentRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.String"/>
+            <arg column="type" javaType="java.lang.String"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="author_user_id" javaType="java.lang.String"/>
+            <arg column="nickname" javaType="java.lang.String"/>
+            <arg column="avatar_url" javaType="java.lang.String"/>
+            <arg column="source_user_id" javaType="java.lang.String"/>
+            <arg column="location" javaType="java.lang.String"/>
+            <arg column="cover_url" javaType="java.lang.String"/>
+            <arg column="source_url" javaType="java.lang.String"/>
+            <arg column="publish_time" javaType="_long"/>
+            <arg column="like_count" javaType="_int"/>
+            <arg column="comment_count" javaType="_int"/>
+            <arg column="favorite_count" javaType="_int"/>
+            <arg column="share_count" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="viewerStateRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.content.ViewerStateRow">
+        <constructor>
+            <idArg column="content_id" javaType="java.lang.String"/>
+            <arg column="liked_by_viewer" javaType="_boolean"/>
+            <arg column="favorited_by_viewer" javaType="_boolean"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="mediaAssetRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMediaAssetRow">
+        <constructor>
+            <arg column="kind" javaType="java.lang.String"/>
+            <arg column="quality" javaType="java.lang.String"/>
+            <arg column="url" javaType="java.lang.String"/>
+            <arg column="storage_key" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="contentColumns">
+        c.id,
+        c.type,
+        c.title,
+        c.author_user_id,
+        u.nickname,
+        u.avatar_url,
+        u.source_user_id,
+        u.location,
+        c.cover_url,
+        c.source_url,
+        coalesce(c.publish_time, 0) as publish_time,
+        s.like_count,
+        s.comment_count,
+        s.favorite_count,
+        s.share_count
+    </sql>
+
+    <sql id="contentJoins">
+        from content_items c
+        join users u on u.id = c.author_user_id
+        join content_stats s on s.content_id = c.id
+    </sql>
+
+    <select id="findAllFeedItems" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        where c.status = 'published'
+          and c.visibility = 'public'
+        order by c.publish_time desc, c.created_at desc
+    </select>
+
+    <select id="findUserContent" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        where c.author_user_id = #{userId}
+          and c.status = 'published'
+          and c.visibility = 'public'
+          and c.show_on_profile = true
+        order by c.publish_time desc, c.created_at desc
+    </select>
+
+    <select id="findFollowingFeed" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        from follows f
+        join content_items c on c.author_user_id = f.following_id
+        join users u on u.id = c.author_user_id
+        join content_stats s on s.content_id = c.id
+        where f.follower_id = #{userId}
+          and c.status = 'published'
+          and c.visibility = 'public'
+        order by c.publish_time desc, c.created_at desc
+    </select>
+
+    <select id="findProfilePosts" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        where c.author_user_id = #{userId}
+          and c.status = 'published'
+        <if test="!ownerView">
+          and c.visibility = 'public'
+          and c.show_on_profile = true
+        </if>
+        order by case when c.profile_pinned_at is null then 1 else 0 end,
+                 c.profile_pinned_at desc,
+                 c.profile_sort_order desc,
+                 c.publish_time desc,
+                 c.created_at desc
+        limit #{limit} offset #{offset}
+    </select>
+
+    <select id="findProfileLiked" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        join content_likes profile_like
+          on profile_like.content_id = c.id
+         and profile_like.user_id = #{userId}
+        where c.status = 'published'
+        <choose>
+            <when test="ownerView">
+              and (c.visibility = 'public' or c.author_user_id = #{userId})
+            </when>
+            <otherwise>
+              and c.visibility = 'public'
+            </otherwise>
+        </choose>
+        order by profile_like.created_at desc, c.publish_time desc, c.created_at desc
+        limit #{limit} offset #{offset}
+    </select>
+
+    <select id="findProfileFavorites" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        join (
+            select ci.content_id, max(ci.created_at) as interacted_at
+            from collections profile_collection
+            join collection_items ci on ci.collection_id = profile_collection.id
+            where profile_collection.user_id = #{userId}
+            group by ci.content_id
+        ) profile_favorite on profile_favorite.content_id = c.id
+        where c.status = 'published'
+        <choose>
+            <when test="ownerView">
+              and (c.visibility = 'public' or c.author_user_id = #{userId})
+            </when>
+            <otherwise>
+              and c.visibility = 'public'
+            </otherwise>
+        </choose>
+        order by profile_favorite.interacted_at desc, c.publish_time desc, c.created_at desc
+        limit #{limit} offset #{offset}
+    </select>
+
+    <select id="countProfilePosts" resultType="long">
+        select count(*)
+        from content_items c
+        where c.author_user_id = #{userId}
+          and c.status = 'published'
+        <if test="!ownerView">
+          and c.visibility = 'public'
+          and c.show_on_profile = true
+        </if>
+    </select>
+
+    <select id="countProfileLiked" resultType="long">
+        select count(*)
+        from content_items c
+        join content_likes profile_like
+          on profile_like.content_id = c.id
+         and profile_like.user_id = #{userId}
+        where c.status = 'published'
+        <choose>
+            <when test="ownerView">
+              and (c.visibility = 'public' or c.author_user_id = #{userId})
+            </when>
+            <otherwise>
+              and c.visibility = 'public'
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="countProfileFavorites" resultType="long">
+        select count(*)
+        from content_items c
+        join (
+            select ci.content_id, max(ci.created_at) as interacted_at
+            from collections profile_collection
+            join collection_items ci on ci.collection_id = profile_collection.id
+            where profile_collection.user_id = #{userId}
+            group by ci.content_id
+        ) profile_favorite on profile_favorite.content_id = c.id
+        where c.status = 'published'
+        <choose>
+            <when test="ownerView">
+              and (c.visibility = 'public' or c.author_user_id = #{userId})
+            </when>
+            <otherwise>
+              and c.visibility = 'public'
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findById" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        where c.id = #{id}
+    </select>
+
+    <select id="findViewerStates" resultMap="viewerStateRowMap">
+        select c.id as content_id,
+               exists (
+                   select 1
+                   from content_likes viewer_like
+                   where viewer_like.content_id = c.id
+                     and viewer_like.user_id = #{viewerUserId}
+               ) as liked_by_viewer,
+               exists (
+                   select 1
+                   from collections viewer_collection
+                   join collection_items viewer_favorite
+                     on viewer_favorite.collection_id = viewer_collection.id
+                   where viewer_collection.user_id = #{viewerUserId}
+                     and viewer_collection.is_default = true
+                     and viewer_favorite.content_id = c.id
+               ) as favorited_by_viewer
+        from content_items c
+        where c.id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+    </select>
+
+    <insert id="insertContent">
+        insert into content_items (
+            id,
+            type,
+            title,
+            description,
+            author_user_id,
+            cover_url,
+            status,
+            visibility,
+            publish_time
+        ) values (
+            #{content.id},
+            #{content.type},
+            #{content.title},
+            #{content.description},
+            #{content.authorUserId},
+            #{content.coverUrl},
+            'published',
+            #{content.visibility},
+            #{content.publishTime}
+        )
+    </insert>
+
+    <insert id="insertContentStats">
+        insert into content_stats (content_id)
+        values (#{contentId})
+    </insert>
+
+    <insert id="insertTags">
+        insert into content_tags (content_id, tag, sort_order)
+        values
+        <foreach collection="values" item="item" separator=",">
+            (#{contentId}, #{item.value}, #{item.sortOrder})
+        </foreach>
+    </insert>
+
+    <insert id="insertRecommendWords">
+        insert into content_recommend_words (content_id, word, sort_order)
+        values
+        <foreach collection="values" item="item" separator=",">
+            (#{contentId}, #{item.value}, #{item.sortOrder})
+        </foreach>
+    </insert>
+
+    <insert id="insertMediaAssets">
+        insert into media_assets (content_id, kind, url, sort_order)
+        values
+        <foreach collection="assets" item="asset" separator=",">
+            (#{asset.contentId}, #{asset.kind}, #{asset.url}, #{asset.sortOrder})
+        </foreach>
+    </insert>
+
+    <select id="findTags" resultType="java.lang.String">
+        select tag
+        from content_tags
+        where content_id = #{contentId}
+        order by sort_order
+    </select>
+
+    <select id="findRecommendWords" resultType="java.lang.String">
+        select word
+        from content_recommend_words
+        where content_id = #{contentId}
+        order by sort_order
+    </select>
+
+    <select id="findFirstAsset" resultMap="mediaAssetRowMap">
+        select kind, quality, url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind = #{kind}
+        <if test="progressiveOnly">
+          and coalesce(delivery_type, 'progressive') = 'progressive'
+        </if>
+        order by sort_order
+        limit 1
+    </select>
+
+    <select id="findHlsAsset" resultMap="mediaAssetRowMap">
+        select kind, quality, url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind = 'video'
+          and delivery_type = 'hls'
+        order by case when quality = 'auto' then 0 else 1 end,
+                 sort_order
+        limit 1
+    </select>
+
+    <select id="findQualityAssets" resultMap="mediaAssetRowMap">
+        select kind, quality, url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind = 'video'
+          and quality is not null
+          and coalesce(delivery_type, 'progressive') = 'progressive'
+        order by sort_order
+    </select>
+
+    <select id="findAlbumAssets" resultMap="mediaAssetRowMap">
+        select kind, quality, url, storage_key
+        from media_assets
+        where content_id = #{contentId}
+          and kind in ('image', 'video')
+        order by sort_order
+    </select>
+
+    <select id="countUserById" resultType="long">
+        select count(*)
+        from users
+        where id = #{userId}
+    </select>
+</mapper>
