@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,18 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 @Service
 public class UploadService {
+
+    /**
+     * Allowed file extensions for user uploads. Executable/markup types
+     * (html, svg, js, ...) are rejected because files are served from the
+     * application origin and could otherwise be used for stored XSS.
+     */
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            ".jpg", ".jpeg", ".png", ".gif", ".webp",
+            ".mp4", ".mov", ".webm", ".m4v",
+            ".mp3", ".m4a", ".aac", ".wav",
+            ".md", ".txt"
+    );
 
     private final Path uploadRoot;
 
@@ -31,6 +44,9 @@ public class UploadService {
             Files.createDirectories(uploadRoot);
             String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
             String extension = extensionOf(original);
+            if (!ALLOWED_EXTENSIONS.contains(extension)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Unsupported file type: " + extension);
+            }
             String fileName = "upl_" + UUID.randomUUID().toString().replace("-", "") + extension;
             Path target = uploadRoot.resolve(fileName).normalize();
             if (!target.startsWith(uploadRoot)) {

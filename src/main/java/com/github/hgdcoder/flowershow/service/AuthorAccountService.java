@@ -14,9 +14,14 @@ import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 @Service
 public class AuthorAccountService {
+
+    private static final int MIN_PASSWORD_LENGTH = 8;
 
     private final AuthorAccountMapper authorAccountMapper;
     private final PasswordEncoder passwordEncoder;
@@ -32,6 +37,13 @@ public class AuthorAccountService {
                 ? new GenerateAuthorAccountsRequest(null, false)
                 : request;
         String password = safeRequest.effectivePassword();
+        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "defaultPassword must be provided and contain at least "
+                            + MIN_PASSWORD_LENGTH + " characters."
+            );
+        }
         String passwordHash = passwordEncoder.encode(password);
         List<AuthorRow> authors = findContentAuthors();
 
@@ -57,7 +69,6 @@ public class AuthorAccountService {
                 created,
                 existing,
                 passwordUpdated,
-                password,
                 findAccountsForVideoAuthors()
         );
     }

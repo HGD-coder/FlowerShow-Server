@@ -11,7 +11,10 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @ConditionalOnExpression("${flower-show.messaging.local-dispatcher-enabled:true} and !${flower-show.messaging.kafka.enabled:false}")
@@ -24,12 +27,14 @@ public class LocalOutboxDispatchOperation {
     private final DomainEventProcessor domainEventProcessor;
     private final ProcessedEventStore processedEventStore;
     private final int maxRetries;
+    private final TransactionTemplate processingTransaction;
 
     public LocalOutboxDispatchOperation(
             OutboxEventMapper outboxEventMapper,
             ObjectMapper objectMapper,
             DomainEventProcessor domainEventProcessor,
             ProcessedEventStore processedEventStore,
+            PlatformTransactionManager transactionManager,
             @Value("${flower-show.events.outbox.max-retries:10}") int maxRetries
     ) {
         this.outboxEventMapper = outboxEventMapper;
@@ -37,6 +42,8 @@ public class LocalOutboxDispatchOperation {
         this.domainEventProcessor = domainEventProcessor;
         this.processedEventStore = processedEventStore;
         this.maxRetries = Math.max(1, maxRetries);
+        this.processingTransaction = new TransactionTemplate(transactionManager);
+        this.processingTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
     }
 
     @Transactional
@@ -48,12 +55,19 @@ public class LocalOutboxDispatchOperation {
 
         OutboxEventRecord row = rows.get(0);
         try {
-            EventEnvelope event = row.toEnvelope(objectMapper);
-            if (!processedEventStore.isProcessed(CONSUMER_NAME, event.eventId())) {
-                domainEventProcessor.process(event);
-                processedEventStore.markProcessed(CONSUMER_NAME, event.eventId());
-            }
-            markProcessed(row.id());
+            // Run the handler inside a savepoint: if a database statement fails,
+            // PostgreSQL aborts the whole transaction, so without the savepoint
+            // the markRetry bookkeeping below would fail too ("current transaction
+            // is aborted") and retry counts/backoff would never be persisted.
+            processingTransaction.execute(status -> {
+                EventEnvelope event = row.toEnvelope(objectMapper);
+                if (!processedEventStore.isProcessed(CONSUMER_NAME, event.eventId())) {
+                    domainEventProcessor.process(event);
+                    processedEventStore.markProcessed(CONSUMER_NAME, event.eventId());
+                }
+                markProcessed(row.id());
+                return null;
+            });
         } catch (Exception e) {
             markRetry(row.id(), e);
         }

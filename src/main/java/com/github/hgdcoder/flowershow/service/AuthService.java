@@ -111,21 +111,22 @@ public class AuthService {
         }
         String username = normalizeUsername(request.username());
         AccountRow account = findAccountByUsername(username);
+        Instant now = Instant.now();
         if (account == null) {
             passwordEncoder.matches(request.password(), dummyPasswordHash);
             throw invalidCredentials();
         }
-        if (!"active".equals(account.status())) {
-            throw new ResponseStatusException(FORBIDDEN, "Account is not active.");
-        }
-
-        Instant now = Instant.now();
-        if (account.lockedUntil() != null && account.lockedUntil().toInstant().isAfter(now)) {
-            throw new ResponseStatusException(TOO_MANY_REQUESTS, "Too many login attempts. Try again later.");
-        }
+        // Verify the password before revealing account state (status/lock),
+        // so unauthenticated callers cannot enumerate usernames via 403/429.
         if (!passwordEncoder.matches(request.password(), account.passwordHash())) {
             recordLoginFailure(account, now);
             throw invalidCredentials();
+        }
+        if (!"active".equals(account.status())) {
+            throw invalidCredentials();
+        }
+        if (account.lockedUntil() != null && account.lockedUntil().toInstant().isAfter(now)) {
+            throw new ResponseStatusException(TOO_MANY_REQUESTS, "Too many login attempts. Try again later.");
         }
 
         authMapper.updateLoginSuccess(account.id(), Timestamp.from(now));
@@ -151,6 +152,9 @@ public class AuthService {
                 Timestamp.from(now)
         );
         if (changed == 0) {
+            // Replay of an already-used refresh token indicates a stolen token:
+            // revoke the whole family before rejecting.
+            authMapper.revokeAllRefreshTokens(account.userId());
             throw new ResponseStatusException(UNAUTHORIZED, "Refresh token has already been used.");
         }
         return tokenResponse(account, replacement.rawToken(), now);
@@ -220,14 +224,14 @@ public class AuthService {
     }
 
     private void recordLoginFailure(AccountRow account, Instant now) {
-        int failures = account.failedLoginAttempts() + 1;
-        Timestamp lockedUntil = failures >= MAX_FAILED_ATTEMPTS
-                ? Timestamp.from(now.plus(LOCK_DURATION))
-                : null;
+        // The counter is incremented atomically in SQL and the lock is only
+        // applied when it is not already active, so concurrent brute-force
+        // attempts cannot lose increments and a locked account cannot have its
+        // lock window extended indefinitely by repeated failures.
         authMapper.updateLoginFailure(
                 account.id(),
-                failures,
-                lockedUntil,
+                MAX_FAILED_ATTEMPTS,
+                Timestamp.from(now.plus(LOCK_DURATION)),
                 Timestamp.from(now)
         );
     }

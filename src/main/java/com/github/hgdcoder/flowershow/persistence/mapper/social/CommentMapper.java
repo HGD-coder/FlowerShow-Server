@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface CommentMapper {
 
-    long countContentById(@Param("contentId") String contentId);
+    long countPublishedPublicContent(@Param("contentId") String contentId);
 
     long countUserById(@Param("userId") String userId);
 

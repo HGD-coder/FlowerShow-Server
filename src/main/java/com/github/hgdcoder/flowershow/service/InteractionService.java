@@ -30,7 +30,7 @@ public class InteractionService {
 
     @Transactional
     public InteractionResultDto likeContent(String contentId, String userId) {
-        assertContentExists(contentId);
+        assertInteractableContent(contentId, "Content not found: " + contentId);
         assertUserExists(userId);
         boolean changed = tryInsertContentLike(contentId, userId);
         if (changed) {
@@ -58,7 +58,7 @@ public class InteractionService {
 
     @Transactional
     public InteractionResultDto favoriteContent(String contentId, String userId) {
-        assertContentExists(contentId);
+        assertInteractableContent(contentId, "Content not found: " + contentId);
         assertUserExists(userId);
         lockUser(userId);
         if (isFavorited(contentId, userId)) {
@@ -94,6 +94,9 @@ public class InteractionService {
     public boolean likeComment(String commentId, String userId) {
         assertUserExists(userId);
         CommentRef comment = findCommentRef(commentId);
+        // A comment on unpublished/private content is not publicly readable,
+        // so it must not be likeable either; the 404 names the comment only.
+        assertInteractableContent(comment.contentId(), "Comment not found: " + commentId);
         boolean changed = tryInsertCommentLike(commentId, userId);
         if (changed) {
             interactionMapper.incrementCommentLikeCount(commentId);
@@ -147,8 +150,7 @@ public class InteractionService {
 
     private boolean tryInsertContentLike(String contentId, String userId) {
         try {
-            interactionMapper.insertContentLike(contentId, userId);
-            return true;
+            return interactionMapper.insertContentLike(contentId, userId) > 0;
         } catch (DuplicateKeyException e) {
             return false;
         }
@@ -156,8 +158,7 @@ public class InteractionService {
 
     private boolean tryInsertCollectionItem(String collectionId, String contentId) {
         try {
-            interactionMapper.insertCollectionItem(collectionId, contentId);
-            return true;
+            return interactionMapper.insertCollectionItem(collectionId, contentId) > 0;
         } catch (DuplicateKeyException e) {
             return false;
         }
@@ -165,10 +166,22 @@ public class InteractionService {
 
     private boolean tryInsertCommentLike(String commentId, String userId) {
         try {
-            interactionMapper.insertCommentLike(commentId, userId);
-            return true;
+            return interactionMapper.insertCommentLike(commentId, userId) > 0;
         } catch (DuplicateKeyException e) {
             return false;
+        }
+    }
+
+    /**
+     * Likes, favorites and comment likes follow the read path's visibility
+     * rule: only published public content may be interacted with. The undo
+     * paths (unlike/unfavorite) deliberately skip this check so existing
+     * interactions can always be reversed. 404 (not 403) keeps
+     * unpublished/private items unenumerable.
+     */
+    private void assertInteractableContent(String contentId, String notFoundMessage) {
+        if (interactionMapper.countPublishedPublicContent(contentId) == 0) {
+            throw new ResponseStatusException(NOT_FOUND, notFoundMessage);
         }
     }
 

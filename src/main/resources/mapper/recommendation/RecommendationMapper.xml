@@ -85,6 +85,62 @@
         order by sort_order
     </select>
 
+    <select id="findTagsByContentIds"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$ContentTagRow">
+        select content_id, tag, sort_order
+        from content_tags
+        where content_id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+        order by content_id, sort_order
+    </select>
+
+    <select id="findRecommendationWordsByContentIds"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$ContentTagRow">
+        select content_id, word as tag, sort_order
+        from content_recommend_words
+        where content_id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+        order by content_id, sort_order
+    </select>
+
+    <select id="findAssetsByContentIds"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$ContentAssetRow">
+        select content_id, kind, quality, url, storage_key, delivery_type, sort_order
+        from media_assets
+        where content_id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+        order by content_id, sort_order
+    </select>
+
+    <select id="findViewerStates"
+            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$BatchViewerStateRow">
+        select target.id as content_id,
+               case when exists (
+                   select 1
+                   from content_likes viewer_like
+                   where viewer_like.content_id = target.id
+                     and viewer_like.user_id = #{viewerUserId}
+               ) then true else false end as liked,
+               case when exists (
+                   select 1
+                   from collection_items viewer_favorite
+                   join collections viewer_collection on viewer_collection.id = viewer_favorite.collection_id
+                   where viewer_favorite.content_id = target.id
+                     and viewer_collection.user_id = #{viewerUserId}
+               ) then true else false end as favorited
+        from content_items target
+        where target.id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+    </select>
+
     <insert id="insertSession">
         insert into recommendation_serve_sessions (
             id, actor_key, kind, query_hash, snapshot_json, created_at, expires_at
@@ -227,64 +283,18 @@
             values (source.actor_key, source.interest_key, source.weight)
     </insert>
 
-    <select id="findViewerState"
-            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$ViewerStateRow">
-        select
-            case when exists (
-                select 1
-                from content_likes
-                where content_id = #{contentId}
-                  and user_id = #{viewerUserId}
-            ) then true else false end as liked,
-            case when exists (
-                select 1
-                from collection_items ci
-                join collections c on c.id = ci.collection_id
-                where ci.content_id = #{contentId}
-                  and c.user_id = #{viewerUserId}
-            ) then true else false end as favorited
-    </select>
+    <delete id="deleteExpiredSessions">
+        delete from recommendation_serve_sessions
+        where expires_at &lt; #{cutoff}
+    </delete>
 
-    <select id="findFirstProgressiveVideoAsset"
-            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$MediaAssetRow">
-        select url, storage_key
-        from media_assets
-        where content_id = #{contentId}
-          and kind = 'video'
-          and coalesce(delivery_type, 'progressive') = 'progressive'
-        order by sort_order
-        limit 1
-    </select>
+    <delete id="deleteExpiredClientRequests">
+        delete from recommendation_client_requests
+        where expires_at &lt; #{cutoff}
+    </delete>
 
-    <select id="findFirstAsset"
-            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$MediaAssetRow">
-        select url, storage_key
-        from media_assets
-        where content_id = #{contentId}
-          and kind = #{kind}
-        order by sort_order
-        limit 1
-    </select>
-
-    <select id="findHlsVideoAsset"
-            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$MediaAssetRow">
-        select url, storage_key
-        from media_assets
-        where content_id = #{contentId}
-          and kind = 'video'
-          and delivery_type = 'hls'
-        order by case when quality = 'auto' then 0 else 1 end, sort_order
-        limit 1
-    </select>
-
-    <select id="findProgressiveVideoQualities"
-            resultType="com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows$QualityAssetRow">
-        select quality, url, storage_key
-        from media_assets
-        where content_id = #{contentId}
-          and kind = 'video'
-          and quality is not null
-          and coalesce(delivery_type, 'progressive') = 'progressive'
-        order by sort_order
-    </select>
+    <delete id="deleteExpiredClientEvents">
+        delete from recommendation_client_events
+        where accepted_at &lt; #{cutoff}
+    </delete>
 </mapper>

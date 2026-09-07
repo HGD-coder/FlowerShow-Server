@@ -209,6 +209,9 @@ public class PushDeliveryStore {
     }
 
     private static String abbreviate(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 

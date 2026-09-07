@@ -71,7 +71,12 @@ public class NotificationService {
     @Transactional
     public int markAllRead(String userId) {
         int changed = notificationMapper.markAllRead(userId);
-        notificationMapper.resetUnreadCount(userId);
+        if (changed > 0) {
+            // Decrement by the number of rows actually marked read instead of
+            // resetting to 0: an absolute write would lose concurrent increments
+            // from notifications inserted while this transaction is in flight.
+            notificationMapper.decrementUnreadCountBy(userId, changed);
+        }
         return changed;
     }
 

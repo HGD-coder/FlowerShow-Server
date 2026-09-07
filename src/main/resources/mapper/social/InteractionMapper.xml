@@ -28,6 +28,14 @@
         where id = #{contentId}
     </select>
 
+    <select id="countPublishedPublicContent" resultType="long">
+        select count(*)
+        from content_items
+        where id = #{contentId}
+          and status = 'published'
+          and visibility = 'public'
+    </select>
+
     <select id="countUserById" resultType="long">
         select count(*)
         from users
@@ -37,6 +45,12 @@
     <insert id="insertContentLike">
         insert into content_likes (content_id, user_id)
         values (#{contentId}, #{userId})
+    </insert>
+
+    <insert id="insertContentLike" databaseId="postgresql">
+        insert into content_likes (content_id, user_id)
+        values (#{contentId}, #{userId})
+        on conflict do nothing
     </insert>
 
     <delete id="deleteContentLike">
@@ -90,6 +104,12 @@
         values (#{collectionId}, #{contentId})
     </insert>
 
+    <insert id="insertCollectionItem" databaseId="postgresql">
+        insert into collection_items (collection_id, content_id)
+        values (#{collectionId}, #{contentId})
+        on conflict do nothing
+    </insert>
+
     <delete id="deleteDefaultCollectionItem">
         delete from collection_items
         where content_id = #{contentId}
@@ -121,6 +141,12 @@
     <insert id="insertCommentLike">
         insert into comment_likes (comment_id, user_id)
         values (#{commentId}, #{userId})
+    </insert>
+
+    <insert id="insertCommentLike" databaseId="postgresql">
+        insert into comment_likes (comment_id, user_id)
+        values (#{commentId}, #{userId})
+        on conflict do nothing
     </insert>
 
     <update id="incrementCommentLikeCount">

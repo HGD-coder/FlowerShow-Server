@@ -70,4 +70,16 @@
             last_error = #{lastError}
         where id = #{eventId}
     </update>
+
+    <delete id="deleteProcessedOlderThan">
+        delete from outbox_events
+        where status = 'processed'
+          and processed_at &lt; #{cutoff}
+    </delete>
+
+    <delete id="deleteDeadOlderThan">
+        delete from outbox_events
+        where status = 'dead'
+          and next_attempt_at &lt; #{cutoff}
+    </delete>
 </mapper>

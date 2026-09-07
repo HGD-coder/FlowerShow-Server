@@ -1,14 +1,14 @@
 package com.github.hgdcoder.flowershow.persistence.mapper.recommendation;
 
+import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.BatchViewerStateRow;
+import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.ContentAssetRow;
+import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.ContentTagRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.InterestRow;
-import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.MediaAssetRow;
-import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.QualityAssetRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.SessionRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.StoredEventRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.StoredRequestRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.SuggestionSignalRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.VideoRow;
-import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.ViewerStateRow;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -28,6 +28,17 @@ public interface RecommendationMapper {
     List<String> findTags(@Param("contentId") String contentId);
 
     List<String> findRecommendationWords(@Param("contentId") String contentId);
+
+    List<ContentTagRow> findTagsByContentIds(@Param("contentIds") List<String> contentIds);
+
+    List<ContentTagRow> findRecommendationWordsByContentIds(@Param("contentIds") List<String> contentIds);
+
+    List<ContentAssetRow> findAssetsByContentIds(@Param("contentIds") List<String> contentIds);
+
+    List<BatchViewerStateRow> findViewerStates(
+            @Param("viewerUserId") String viewerUserId,
+            @Param("contentIds") List<String> contentIds
+    );
 
     int insertSession(
             @Param("id") String id,
@@ -97,19 +108,9 @@ public interface RecommendationMapper {
             @Param("weight") double weight
     );
 
-    ViewerStateRow findViewerState(
-            @Param("contentId") String contentId,
-            @Param("viewerUserId") String viewerUserId
-    );
+    int deleteExpiredSessions(@Param("cutoff") Instant cutoff);
 
-    MediaAssetRow findFirstProgressiveVideoAsset(@Param("contentId") String contentId);
+    int deleteExpiredClientRequests(@Param("cutoff") Instant cutoff);
 
-    MediaAssetRow findFirstAsset(
-            @Param("contentId") String contentId,
-            @Param("kind") String kind
-    );
-
-    MediaAssetRow findHlsVideoAsset(@Param("contentId") String contentId);
-
-    List<QualityAssetRow> findProgressiveVideoQualities(@Param("contentId") String contentId);
+    int deleteExpiredClientEvents(@Param("cutoff") Instant cutoff);
 }

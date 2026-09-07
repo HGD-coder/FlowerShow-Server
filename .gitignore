@@ -62,3 +62,8 @@ build/
 
 # Local diagnostics
 *.log
+
+# Local development tools and generated caches
+/.modlens-runtime/
+/.modlens-setup/
+/.tools/

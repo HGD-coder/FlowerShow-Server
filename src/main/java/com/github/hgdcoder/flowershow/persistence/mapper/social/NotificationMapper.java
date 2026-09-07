@@ -27,7 +27,10 @@ public interface NotificationMapper {
 
     int markAllRead(@Param("userId") String userId);
 
-    int resetUnreadCount(@Param("userId") String userId);
+    int decrementUnreadCountBy(
+            @Param("userId") String userId,
+            @Param("delta") int delta
+    );
 
     record NotificationRow(
             String id,

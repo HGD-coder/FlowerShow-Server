@@ -44,6 +44,28 @@
         </constructor>
     </resultMap>
 
+    <resultMap id="contentTagRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMapper$ContentTagRow">
+        <constructor>
+            <arg column="content_id" javaType="java.lang.String"/>
+            <arg column="tag" javaType="java.lang.String"/>
+            <arg column="sort_order" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="contentAssetRowMap"
+               type="com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMapper$ContentAssetRow">
+        <constructor>
+            <arg column="content_id" javaType="java.lang.String"/>
+            <arg column="kind" javaType="java.lang.String"/>
+            <arg column="quality" javaType="java.lang.String"/>
+            <arg column="url" javaType="java.lang.String"/>
+            <arg column="storage_key" javaType="java.lang.String"/>
+            <arg column="delivery_type" javaType="java.lang.String"/>
+            <arg column="sort_order" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
     <sql id="contentColumns">
         c.id,
         c.type,
@@ -75,6 +97,99 @@
         where c.status = 'published'
           and c.visibility = 'public'
         order by c.publish_time desc, c.created_at desc
+    </select>
+
+    <select id="findFeedPage" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        where c.status = 'published'
+          and c.visibility = 'public'
+        order by c.publish_time desc, c.created_at desc
+        limit #{limit} offset #{offset}
+    </select>
+
+    <select id="findVideoPage" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>
+        <include refid="contentJoins"/>
+        where c.status = 'published'
+          and c.visibility = 'public'
+          and c.type = 'video'
+        order by c.publish_time desc, c.created_at desc
+        limit #{limit} offset #{offset}
+    </select>
+
+    <select id="search" resultMap="contentRowMap">
+        select
+        <include refid="contentColumns"/>,
+        (
+            case when position(#{query} in lower(c.title)) &gt; 0 then 40 else 0 end
+            + case when position(#{query} in lower(u.nickname)) &gt; 0 then 20 else 0 end
+            + case when exists (
+                select 1
+                from content_tags search_tag
+                where search_tag.content_id = c.id
+                  and position(#{query} in lower(search_tag.tag)) &gt; 0
+            ) then 20 else 0 end
+            + case when exists (
+                select 1
+                from content_recommend_words search_word
+                where search_word.content_id = c.id
+                  and position(#{query} in lower(search_word.word)) &gt; 0
+            ) then 10 else 0 end
+            + case when exists (
+                select 1
+                from media_assets search_asset
+                where search_asset.content_id = c.id
+                  and search_asset.kind = 'image'
+                  and c.type = 'image'
+                  and position(#{query} in lower(search_asset.url)) &gt; 0
+            ) then 5 else 0 end
+        ) as search_score
+        <include refid="contentJoins"/>
+        where c.status = 'published'
+          and c.visibility = 'public'
+          and (
+              position(#{query} in lower(c.title)) &gt; 0
+              or position(#{query} in lower(u.nickname)) &gt; 0
+              or exists (
+                  select 1
+                  from content_tags filter_tag
+                  where filter_tag.content_id = c.id
+                    and position(#{query} in lower(filter_tag.tag)) &gt; 0
+              )
+              or exists (
+                  select 1
+                  from content_recommend_words filter_word
+                  where filter_word.content_id = c.id
+                    and position(#{query} in lower(filter_word.word)) &gt; 0
+              )
+              or exists (
+                  select 1
+                  from media_assets filter_asset
+                  where filter_asset.content_id = c.id
+                    and filter_asset.kind = 'image'
+                    and c.type = 'image'
+                    and position(#{query} in lower(filter_asset.url)) &gt; 0
+              )
+          )
+        order by search_score desc, c.publish_time desc, c.created_at desc
+        limit #{limit}
+    </select>
+
+    <select id="findProfileVisibility" resultType="java.lang.String">
+        select profile_visibility
+        from users
+        where id = #{userId}
+    </select>
+
+    <select id="countPublishedPublicContent" resultType="long">
+        select count(*)
+        from content_items
+        where id = #{id}
+          and status = 'published'
+          and visibility = 'public'
     </select>
 
     <select id="findUserContent" resultMap="contentRowMap">
@@ -308,6 +423,36 @@
         from content_recommend_words
         where content_id = #{contentId}
         order by sort_order
+    </select>
+
+    <select id="findTagsByContentIds" resultMap="contentTagRowMap">
+        select content_id, tag, sort_order
+        from content_tags
+        where content_id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+        order by content_id, sort_order
+    </select>
+
+    <select id="findRecommendWordsByContentIds" resultMap="contentTagRowMap">
+        select content_id, word as tag, sort_order
+        from content_recommend_words
+        where content_id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+        order by content_id, sort_order
+    </select>
+
+    <select id="findAssetsByContentIds" resultMap="contentAssetRowMap">
+        select content_id, kind, quality, url, storage_key, delivery_type, sort_order
+        from media_assets
+        where content_id in
+        <foreach collection="contentIds" item="contentId" open="(" separator="," close=")">
+            #{contentId}
+        </foreach>
+        order by content_id, sort_order
     </select>
 
     <select id="findFirstAsset" resultMap="mediaAssetRowMap">

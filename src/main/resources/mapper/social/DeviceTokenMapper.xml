@@ -47,6 +47,18 @@
         )
     </insert>
 
+    <insert id="insertDevice" databaseId="postgresql">
+        insert into user_device_tokens (
+            id, user_id, token, platform, device_name, recipient_type,
+            push_provider, device_brand, app_package, enabled
+        )
+        values (
+            #{id}, #{userId}, #{token}, #{platform}, #{deviceName}, #{recipientType},
+            #{pushProvider}, #{deviceBrand}, #{appPackage}, true
+        )
+        on conflict do nothing
+    </insert>
+
     <delete id="deletePendingDeliveries">
         delete from notification_deliveries
         where device_token_id = #{deviceId} and status in ('pending', 'retry')

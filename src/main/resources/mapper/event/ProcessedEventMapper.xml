@@ -15,4 +15,15 @@
         insert into consumer_processed_events (consumer_name, event_id)
         values (#{consumerName}, #{eventId})
     </insert>
+
+    <insert id="insertProcessed" databaseId="postgresql">
+        insert into consumer_processed_events (consumer_name, event_id)
+        values (#{consumerName}, #{eventId})
+        on conflict do nothing
+    </insert>
+
+    <delete id="deleteOlderThan">
+        delete from consumer_processed_events
+        where processed_at &lt; #{cutoff}
+    </delete>
 </mapper>

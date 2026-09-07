@@ -64,6 +64,11 @@
         values (#{id}, #{userId}, #{username}, #{passwordHash}, 'user', 'active', false)
     </insert>
 
+    <insert id="insertAccountWithRole">
+        insert into accounts (id, user_id, username, password_hash, role, status, generated)
+        values (#{id}, #{userId}, #{username}, #{passwordHash}, #{role}, 'active', false)
+    </insert>
+
     <insert id="insertUserSocialStats">
         insert into user_social_stats (user_id)
         values (#{userId})
@@ -99,9 +104,14 @@
 
     <update id="updateLoginFailure">
         update accounts
-        set failed_login_attempts = #{failedLoginAttempts},
-            locked_until = #{lockedUntil},
-            updated_at = #{updatedAt}
+        set failed_login_attempts = failed_login_attempts + 1,
+            locked_until = case
+                when failed_login_attempts + 1 &gt;= #{maxFailedAttempts}
+                     and (locked_until is null or locked_until &lt;= #{now})
+                then #{lockedUntil}
+                else locked_until
+            end,
+            updated_at = #{now}
         where id = #{accountId}
     </update>
 

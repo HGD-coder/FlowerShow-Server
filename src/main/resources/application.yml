@@ -40,6 +40,18 @@ spring:
       missing-topics-fatal: false
 
 flower-show:
+  cors:
+    # Comma-separated list of allowed origin patterns, e.g. "https://app.example.com,https://*.example.com".
+    # Restrict this in production instead of leaving the wildcard default.
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:*}
+  admin:
+    # Set both to bootstrap the first admin account (role=admin) on startup.
+    bootstrap-username: ${ADMIN_BOOTSTRAP_USERNAME:}
+    bootstrap-password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+  maintenance:
+    purge-enabled: ${MAINTENANCE_PURGE_ENABLED:true}
+    purge-cron: ${MAINTENANCE_PURGE_CRON:0 30 3 * * *}
+    retention-days: ${MAINTENANCE_RETENTION_DAYS:30}
   auth:
     jwt:
       secret: ${JWT_SECRET:}
@@ -55,6 +67,7 @@ flower-show:
   chat:
     websocket:
       enabled: ${CHAT_WEBSOCKET_ENABLED:true}
+      host: ${CHAT_WEBSOCKET_HOST:127.0.0.1}
       port: ${CHAT_WEBSOCKET_PORT:8090}
       path: ${CHAT_WEBSOCKET_PATH:/ws/chat}
       idle-timeout: ${CHAT_WEBSOCKET_IDLE_TIMEOUT:60s}

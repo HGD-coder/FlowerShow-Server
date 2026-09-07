@@ -61,12 +61,20 @@ public final class RecommendationRows {
     public record StoredEventRow(String eventFingerprint) {
     }
 
-    public record ViewerStateRow(boolean liked, boolean favorited) {
+    public record BatchViewerStateRow(String contentId, boolean liked, boolean favorited) {
     }
 
-    public record MediaAssetRow(String url, String storageKey) {
+    public record ContentTagRow(String contentId, String tag, int sortOrder) {
     }
 
-    public record QualityAssetRow(String quality, String url, String storageKey) {
+    public record ContentAssetRow(
+            String contentId,
+            String kind,
+            String quality,
+            String url,
+            String storageKey,
+            String deliveryType,
+            int sortOrder
+    ) {
     }
 }

@@ -7,7 +7,30 @@ public interface ContentMapper {
 
     List<ContentRow> findAllFeedItems();
 
+    List<ContentRow> findFeedPage(
+            @Param("offset") int offset,
+            @Param("limit") int limit
+    );
+
+    List<ContentRow> findVideoPage(
+            @Param("offset") int offset,
+            @Param("limit") int limit
+    );
+
+    /**
+     * Keyword search scored in SQL. {@code query} must already be normalized
+     * (trimmed, lowercased) and non-blank; results are ordered by score desc.
+     */
+    List<ContentRow> search(
+            @Param("query") String query,
+            @Param("limit") int limit
+    );
+
     List<ContentRow> findUserContent(@Param("userId") String userId);
+
+    String findProfileVisibility(@Param("userId") String userId);
+
+    long countPublishedPublicContent(@Param("id") String id);
 
     List<ContentRow> findFollowingFeed(@Param("userId") String userId);
 
@@ -74,6 +97,12 @@ public interface ContentMapper {
 
     List<String> findRecommendWords(@Param("contentId") String contentId);
 
+    List<ContentTagRow> findTagsByContentIds(@Param("contentIds") List<String> contentIds);
+
+    List<ContentTagRow> findRecommendWordsByContentIds(@Param("contentIds") List<String> contentIds);
+
+    List<ContentAssetRow> findAssetsByContentIds(@Param("contentIds") List<String> contentIds);
+
     ContentMediaAssetRow findFirstAsset(
             @Param("contentId") String contentId,
             @Param("kind") String kind,
@@ -87,4 +116,18 @@ public interface ContentMapper {
     List<ContentMediaAssetRow> findAlbumAssets(@Param("contentId") String contentId);
 
     long countUserById(@Param("userId") String userId);
+
+    record ContentTagRow(String contentId, String tag, int sortOrder) {
+    }
+
+    record ContentAssetRow(
+            String contentId,
+            String kind,
+            String quality,
+            String url,
+            String storageKey,
+            String deliveryType,
+            int sortOrder
+    ) {
+    }
 }

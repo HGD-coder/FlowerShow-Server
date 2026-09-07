@@ -22,4 +22,8 @@ public interface OutboxEventMapper {
             @Param("nextAttemptAt") Timestamp nextAttemptAt,
             @Param("lastError") String lastError
     );
+
+    int deleteProcessedOlderThan(@Param("cutoff") Timestamp cutoff);
+
+    int deleteDeadOlderThan(@Param("cutoff") Timestamp cutoff);
 }

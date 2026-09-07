@@ -190,4 +190,10 @@
               or (status = 'processing' and claimed_by = #{claimOwner})
           )
     </update>
+
+    <delete id="deleteTerminalDeliveriesOlderThan">
+        delete from notification_deliveries
+        where status in ('delivered', 'dead')
+          and created_at &lt; #{cutoff}
+    </delete>
 </mapper>

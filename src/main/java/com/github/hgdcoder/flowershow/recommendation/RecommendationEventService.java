@@ -60,7 +60,14 @@ public class RecommendationEventService {
 
     @Transactional
     public EventBatchData process(Actor actor, List<ClientEvent> events) {
-        return new EventBatchData(events.stream().map(event -> processOne(actor, event)).toList());
+        if (events == null) {
+            return new EventBatchData(List.of());
+        }
+        return new EventBatchData(events.stream()
+                .map(event -> event == null
+                        ? EventResult.rejected("", "INVALID_EVENT", "Event entries must not be null.")
+                        : processOne(actor, event))
+                .toList());
     }
 
     private EventResult processOne(Actor actor, ClientEvent event) {

@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Flower Show Server 系统架构",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/HGD-coder/FlowerShow-Server.git",
+      "revision": "d78294e9a80ca236423cff8b8a844c6434568876"
+    },
+    "views": [
+      {
+        "id": "request-path",
+        "label": "主请求链路",
+        "focus": ["android", "cloudflare", "nginx", "spring", "postgres"],
+        "note": "App 经 Cloudflare 隧道与 Nginx 网关进入 Spring REST，业务数据落库 PostgreSQL。"
+      },
+      {
+        "id": "realtime-chat",
+        "label": "实时聊天",
+        "focus": ["android", "cloudflare", "nginx", "chatws", "spring"],
+        "note": "消息写入走 REST；Netty WebSocket 只推送 chat.message.created 在线事件。"
+      },
+      {
+        "id": "events-recommendation",
+        "label": "事件与推荐",
+        "focus": ["spring", "kafka", "postgres", "ollama", "fcm"],
+        "note": "Outbox 事务性发布，Kafka 与本地分发器双路径消费；Ollama 与 FCM 均为可选能力。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "android",
+      "type": "external",
+      "label": "Flower Show Android App",
+      "sublabel": "REST · WebSocket · FCM",
+      "pos": [40, 300],
+      "size": [150, 80]
+    },
+    {
+      "id": "cloudflare",
+      "type": "cloud",
+      "label": "Cloudflare Tunnel",
+      "sublabel": "Quick / 命名隧道 · 公共 HTTPS",
+      "pos": [40, 500],
+      "size": [150, 80],
+      "sources": [{ "path": "docker-compose.yml", "line": 133 }]
+    },
+    {
+      "id": "nginx",
+      "type": "cloud",
+      "label": "Nginx 网关 :8088",
+      "sublabel": "API · 媒体 · WS 唯一入口",
+      "pos": [230, 380],
+      "size": [150, 80],
+      "sources": [{ "path": "infra/nginx/default.conf", "line": 1 }]
+    },
+    {
+      "id": "jwt",
+      "type": "security",
+      "label": "JWT 认证",
+      "sublabel": "访问令牌 15m · 刷新 30d",
+      "pos": [390, 140],
+      "size": [150, 68],
+      "sources": [{ "path": "src/main/resources/application.yml", "line": 55 }]
+    },
+    {
+      "id": "spring",
+      "type": "backend",
+      "label": "Spring Boot 服务",
+      "sublabel": "REST :8080 · MyBatis · Flyway",
+      "pos": [470, 320],
+      "size": [180, 100],
+      "sources": [{ "path": "src/main/resources/application.yml", "line": 4 }]
+    },
+    {
+      "id": "chatws",
+      "type": "backend",
+      "label": "Chat WebSocket :8090",
+      "sublabel": "Netty · 同一 Spring 进程",
+      "pos": [470, 520],
+      "size": [180, 72],
+      "sources": [{ "path": "src/main/resources/application.yml", "line": 67 }]
+    },
+    {
+      "id": "kafka",
+      "type": "messagebus",
+      "label": "Kafka 4",
+      "sublabel": "domain-events · feed-fanout",
+      "pos": [720, 160],
+      "size": [170, 72],
+      "tag": "KRaft 单节点",
+      "sources": [{ "path": "docker-compose.yml", "line": 2 }]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL 16",
+      "sublabel": "pgvector · 唯一源真相",
+      "pos": [720, 370],
+      "size": [170, 72],
+      "sources": [{ "path": "docker-compose.yml", "line": 35 }]
+    },
+    {
+      "id": "minio",
+      "type": "cloud",
+      "label": "MinIO",
+      "sublabel": "媒体 · HLS 分片",
+      "pos": [720, 630],
+      "size": [170, 72],
+      "tag": "flower-show-media",
+      "sources": [{ "path": "docker-compose.yml", "line": 84 }]
+    },
+    {
+      "id": "fcm",
+      "type": "external",
+      "label": "Firebase FCM",
+      "sublabel": "远程推送 · 可选",
+      "pos": [980, 140],
+      "size": [160, 72],
+      "sources": [{ "path": "README.md", "line": 283 }]
+    },
+    {
+      "id": "ollama",
+      "type": "external",
+      "label": "Ollama",
+      "sublabel": "qwen3-embedding:0.6b · 可选",
+      "pos": [1290, 140],
+      "size": [160, 72],
+      "sources": [{ "path": "docker-compose.yml", "line": 54 }]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Spring Boot 应用 · Spring Security + JWT",
+      "wraps": ["jwt", "spring", "chatws"]
+    },
+    {
+      "kind": "region",
+      "label": "数据与异步层（Docker Compose）",
+      "wraps": ["kafka", "postgres", "minio"]
+    }
+  ],
+  "connections": [
+    { "id": "app-to-tunnel", "from": "android", "to": "cloudflare", "label": "HTTPS / WSS", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+    { "id": "tunnel-to-nginx", "from": "cloudflare", "to": "nginx", "label": "Tunnel 转发", "fromSide": "right", "toSide": "left" },
+    { "id": "nginx-to-spring", "from": "nginx", "to": "spring", "label": "REST /api/*", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "nginx-to-chatws", "from": "nginx", "to": "chatws", "label": "WebSocket 升级", "fromSide": "right", "toSide": "left" },
+    { "id": "nginx-to-minio", "from": "nginx", "to": "minio", "label": "GET /media 流式代理", "fromSide": "bottom", "toSide": "top", "via": [[305, 608], [805, 608]], "labelDy": 16 },
+    { "id": "jwt-to-spring", "from": "jwt", "to": "spring", "label": "校验 Bearer 令牌", "variant": "security", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+    { "id": "spring-to-chatws", "from": "spring", "to": "chatws", "label": "广播 chat.message.created", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+    { "id": "spring-to-postgres", "from": "spring", "to": "postgres", "label": "MyBatis SQL · Flyway 迁移", "fromSide": "right", "toSide": "left", "labelDx": 60, "labelDy": -46 },
+    { "id": "spring-to-kafka", "from": "spring", "to": "kafka", "label": "Outbox 发布 / 消费", "variant": "dashed", "fromSide": "right", "toSide": "left", "via": [[675, 370], [675, 196]] },
+    { "id": "spring-to-ollama", "from": "spring", "to": "ollama", "label": "向量嵌入（可选）", "variant": "dashed", "fromSide": "top", "toSide": "left", "labelDx": -40, "labelDy": -10 },
+    { "id": "spring-to-fcm", "from": "spring", "to": "fcm", "label": "FCM 推送（可选）", "variant": "dashed", "fromSide": "top", "toSide": "left" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "入口与网关",
+      "items": [
+        "/api/v1/import/* 在网关被 403 拦截，仅限本机导入"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "应用核心",
+      "items": [
+        "业务写入与 Outbox 同事务提交，Kafka 至少一次投递并幂等消费",
+        "推荐走 pgvector 混合检索，Ollama 不可用时回退关键词排序",
+        "FCM 推送 Worker 以 FOR UPDATE SKIP LOCKED 领取，指数退避"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "数据与运维",
+      "items": [
+        "PostgreSQL 是唯一源真相：业务、Outbox、通知与推送状态",
+        "MinIO 保存媒体与 HLS 分片，Nginx 直代理 /media",
+        "start-flowershow.ps1 一键编排基础设施与构建；HLS 脚本转码并上传 MinIO"
+      ]
+    }
+  ]
+}

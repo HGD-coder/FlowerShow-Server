@@ -5,7 +5,10 @@ public record GenerateAuthorAccountsRequest(
         Boolean overwriteExistingPassword
 ) {
     public String effectivePassword() {
-        return defaultPassword == null || defaultPassword.isBlank() ? "Flower@123456" : defaultPassword;
+        if (defaultPassword == null || defaultPassword.isBlank()) {
+            return null;
+        }
+        return defaultPassword.trim();
     }
 
     public boolean shouldOverwriteExistingPassword() {

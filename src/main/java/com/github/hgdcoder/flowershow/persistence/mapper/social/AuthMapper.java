@@ -26,6 +26,14 @@ public interface AuthMapper {
             @Param("passwordHash") String passwordHash
     );
 
+    int insertAccountWithRole(
+            @Param("id") String id,
+            @Param("userId") String userId,
+            @Param("username") String username,
+            @Param("passwordHash") String passwordHash,
+            @Param("role") String role
+    );
+
     int insertUserSocialStats(@Param("userId") String userId);
 
     int insertNotificationUnreadStats(@Param("userId") String userId);
@@ -41,9 +49,9 @@ public interface AuthMapper {
 
     int updateLoginFailure(
             @Param("accountId") String accountId,
-            @Param("failedLoginAttempts") int failedLoginAttempts,
+            @Param("maxFailedAttempts") int maxFailedAttempts,
             @Param("lockedUntil") Timestamp lockedUntil,
-            @Param("updatedAt") Timestamp updatedAt
+            @Param("now") Timestamp now
     );
 
     int insertRefreshToken(

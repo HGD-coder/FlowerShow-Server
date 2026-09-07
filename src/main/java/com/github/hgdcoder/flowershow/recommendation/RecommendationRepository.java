@@ -4,18 +4,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.hgdcoder.flowershow.model.VideoCardDto;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationMapper;
+import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.BatchViewerStateRow;
+import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.ContentAssetRow;
+import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.ContentTagRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.InterestRow;
-import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.MediaAssetRow;
-import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.QualityAssetRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.SessionRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.StoredEventRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.StoredRequestRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.SuggestionSignalRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.VideoRow;
-import com.github.hgdcoder.flowershow.persistence.mapper.recommendation.RecommendationRows.ViewerStateRow;
 import com.github.hgdcoder.flowershow.recommendation.RecommendationModels.ServeSession;
 import com.github.hgdcoder.flowershow.recommendation.RecommendationModels.Snapshot;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -48,9 +49,7 @@ public class RecommendationRepository {
     }
 
     public List<VideoCandidate> eligibleVideos(String viewerUserId) {
-        return mapper.findEligibleVideos(MAX_CANDIDATES).stream()
-                .map(row -> toCandidate(row, viewerUserId))
-                .toList();
+        return toCandidates(mapper.findEligibleVideos(MAX_CANDIDATES), viewerUserId);
     }
 
     public List<VideoCandidate> eligibleVideosByIds(
@@ -61,9 +60,7 @@ public class RecommendationRepository {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return mapper.findEligibleVideosByIds(ids).stream()
-                .map(row -> toCandidate(row, viewerUserId))
-                .toList();
+        return toCandidates(mapper.findEligibleVideosByIds(ids), viewerUserId);
     }
 
     public Map<String, Double> interests(String actorKey) {
@@ -246,22 +243,66 @@ public class RecommendationRepository {
         }
     }
 
-    private VideoCandidate toCandidate(VideoRow row, String viewerUserId) {
-        List<String> tags = mapper.findTags(row.id());
-        List<String> words = mapper.findRecommendationWords(row.id());
-        ViewerState viewerState = viewerState(row.id(), viewerUserId);
-        MediaAssetRow videoAsset = mapper.findFirstProgressiveVideoAsset(row.id());
-        MediaAssetRow musicAsset = mapper.findFirstAsset(row.id(), "music");
-        MediaAssetRow hlsAsset = mapper.findHlsVideoAsset(row.id());
+    private List<VideoCandidate> toCandidates(List<VideoRow> rows, String viewerUserId) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        List<String> contentIds = rows.stream().map(VideoRow::id).distinct().toList();
+
+        Map<String, List<String>> tagsById = new HashMap<>();
+        for (ContentTagRow tag : mapper.findTagsByContentIds(contentIds)) {
+            tagsById.computeIfAbsent(tag.contentId(), ignored -> new ArrayList<>()).add(tag.tag());
+        }
+        Map<String, List<String>> wordsById = new HashMap<>();
+        for (ContentTagRow word : mapper.findRecommendationWordsByContentIds(contentIds)) {
+            wordsById.computeIfAbsent(word.contentId(), ignored -> new ArrayList<>()).add(word.tag());
+        }
+        Map<String, List<ContentAssetRow>> assetsById = new HashMap<>();
+        for (ContentAssetRow asset : mapper.findAssetsByContentIds(contentIds)) {
+            assetsById.computeIfAbsent(asset.contentId(), ignored -> new ArrayList<>()).add(asset);
+        }
+        Map<String, ViewerState> viewerStates = viewerStates(contentIds, viewerUserId);
+
+        return rows.stream()
+                .map(row -> toCandidate(
+                        row,
+                        viewerUserId,
+                        tagsById.getOrDefault(row.id(), List.of()),
+                        wordsById.getOrDefault(row.id(), List.of()),
+                        assetsById.getOrDefault(row.id(), List.of()),
+                        viewerStates.getOrDefault(row.id(), ViewerState.NONE)
+                ))
+                .toList();
+    }
+
+    private Map<String, ViewerState> viewerStates(List<String> contentIds, String viewerUserId) {
+        if (viewerUserId == null || viewerUserId.isBlank()) {
+            return Map.of();
+        }
+        Map<String, ViewerState> states = new HashMap<>();
+        for (BatchViewerStateRow row : mapper.findViewerStates(viewerUserId.trim(), contentIds)) {
+            states.put(row.contentId(), new ViewerState(row.liked(), row.favorited()));
+        }
+        return states;
+    }
+
+    private VideoCandidate toCandidate(
+            VideoRow row,
+            String viewerUserId,
+            List<String> tags,
+            List<String> words,
+            List<ContentAssetRow> assets,
+            ViewerState viewerState
+    ) {
         VideoCardDto payload = new VideoCardDto(
                 "video",
                 row.id(),
                 row.title(),
                 row.nickname(),
                 row.avatarUrl(),
-                resolveMediaUrl(videoAsset),
+                firstProgressiveUrl(assets, "video"),
                 row.coverUrl(),
-                resolveMediaUrl(musicAsset),
+                firstUrl(assets, "music"),
                 row.likeCount(),
                 row.commentCount(),
                 row.favoriteCount(),
@@ -273,8 +314,8 @@ public class RecommendationRepository {
                 row.location(),
                 row.sourceUrl(),
                 row.publishTime(),
-                qualityUrls(row.id()),
-                resolveMediaUrl(hlsAsset),
+                qualityUrls(assets),
+                hlsUrl(assets),
                 row.authorUserId(),
                 viewerState.liked(),
                 viewerState.favorited()
@@ -293,28 +334,54 @@ public class RecommendationRepository {
         );
     }
 
-    private ViewerState viewerState(String contentId, String viewerUserId) {
-        if (viewerUserId == null || viewerUserId.isBlank()) {
-            return ViewerState.NONE;
-        }
-        ViewerStateRow row = mapper.findViewerState(contentId, viewerUserId);
-        return row == null ? ViewerState.NONE : new ViewerState(row.liked(), row.favorited());
+    private String firstUrl(List<ContentAssetRow> assets, String kind) {
+        return assets.stream()
+                .filter(asset -> kind.equals(asset.kind()))
+                .map(asset -> resolveMediaUrl(asset.url(), asset.storageKey()))
+                .findFirst()
+                .orElse("");
     }
 
-    private Map<String, String> qualityUrls(String contentId) {
-        List<QualityAssetRow> rows = mapper.findProgressiveVideoQualities(contentId);
-        if (rows.isEmpty()) {
-            return null;
-        }
-        Map<String, String> values = new LinkedHashMap<>();
-        for (QualityAssetRow row : rows) {
-            values.put(row.quality(), resolveMediaUrl(row.url(), row.storageKey()));
-        }
-        return values;
+    private String firstProgressiveUrl(List<ContentAssetRow> assets, String kind) {
+        return assets.stream()
+                .filter(asset -> kind.equals(asset.kind()))
+                .filter(asset -> asset.deliveryType() == null
+                        || "progressive".equalsIgnoreCase(asset.deliveryType()))
+                .map(asset -> resolveMediaUrl(asset.url(), asset.storageKey()))
+                .findFirst()
+                .orElse("");
     }
 
-    private String resolveMediaUrl(MediaAssetRow asset) {
-        return asset == null ? null : resolveMediaUrl(asset.url(), asset.storageKey());
+    private String hlsUrl(List<ContentAssetRow> assets) {
+        ContentAssetRow first = null;
+        ContentAssetRow auto = null;
+        for (ContentAssetRow asset : assets) {
+            if (!"video".equals(asset.kind()) || !"hls".equalsIgnoreCase(asset.deliveryType())) {
+                continue;
+            }
+            if (first == null) {
+                first = asset;
+            }
+            if ("auto".equals(asset.quality()) && auto == null) {
+                auto = asset;
+            }
+        }
+        ContentAssetRow chosen = auto != null ? auto : first;
+        return chosen == null ? null : resolveMediaUrl(chosen.url(), chosen.storageKey());
+    }
+
+    private Map<String, String> qualityUrls(List<ContentAssetRow> assets) {
+        Map<String, String> urls = new LinkedHashMap<>();
+        for (ContentAssetRow asset : assets) {
+            if (!"video".equals(asset.kind()) || asset.quality() == null) {
+                continue;
+            }
+            if (asset.deliveryType() != null && !"progressive".equalsIgnoreCase(asset.deliveryType())) {
+                continue;
+            }
+            urls.put(asset.quality(), resolveMediaUrl(asset.url(), asset.storageKey()));
+        }
+        return urls.isEmpty() ? null : urls;
     }
 
     private String resolveMediaUrl(String url, String storageKey) {

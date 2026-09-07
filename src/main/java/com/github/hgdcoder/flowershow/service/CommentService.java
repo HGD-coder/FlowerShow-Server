@@ -30,7 +30,7 @@ public class CommentService {
     }
 
     public List<CommentDto> findComments(String contentId) {
-        assertContentExists(contentId);
+        requirePubliclyReadableContent(contentId);
         return commentMapper.findVisibleByContentId(contentId).stream()
                 .map(CommentService::toDto)
                 .toList();
@@ -38,7 +38,7 @@ public class CommentService {
 
     @Transactional
     public CommentDto createComment(String contentId, CreateCommentRequest request) {
-        assertContentExists(contentId);
+        requirePubliclyReadableContent(contentId);
         assertUserExists(request.userId());
         if (request.parentId() != null && !request.parentId().isBlank()) {
             assertParentCommentBelongsToContent(request.parentId(), contentId);
@@ -81,8 +81,11 @@ public class CommentService {
         }
     }
 
-    private void assertContentExists(String contentId) {
-        if (commentMapper.countContentById(contentId) == 0) {
+    private void requirePubliclyReadableContent(String contentId) {
+        // Comments are only readable and writable for published public content,
+        // so the write path enforces the same rule as the read path; 404 (not
+        // 403) keeps unpublished/private items unenumerable.
+        if (commentMapper.countPublishedPublicContent(contentId) == 0) {
             throw new ResponseStatusException(NOT_FOUND, "Content not found: " + contentId);
         }
     }

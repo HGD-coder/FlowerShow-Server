@@ -9,6 +9,8 @@ public interface InteractionMapper {
 
     long countContentById(@Param("contentId") String contentId);
 
+    long countPublishedPublicContent(@Param("contentId") String contentId);
+
     long countUserById(@Param("userId") String userId);
 
     int insertContentLike(

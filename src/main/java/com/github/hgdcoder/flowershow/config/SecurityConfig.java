@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Set;
@@ -197,6 +198,7 @@ public class SecurityConfig {
                 .normalize();
         try {
             if (Files.exists(path)) {
+                lockDownSecretFile(path);
                 return Files.readString(path, StandardCharsets.UTF_8).trim();
             }
             Path parent = path.getParent();
@@ -213,9 +215,26 @@ public class SecurityConfig {
                     StandardOpenOption.CREATE_NEW,
                     StandardOpenOption.WRITE
             );
+            lockDownSecretFile(path);
             return generated;
         } catch (IOException e) {
             throw new IllegalStateException("Unable to load or create the local JWT secret file: " + path, e);
         }
+    }
+
+    private static void lockDownSecretFile(Path path) {
+        try {
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"));
+            return;
+        } catch (UnsupportedOperationException ignored) {
+            // Non-POSIX filesystem (e.g. Windows): best-effort ACL tightening below.
+        } catch (IOException ignored) {
+            return;
+        }
+        java.io.File file = path.toFile();
+        file.setReadable(true, true);
+        file.setWritable(true, true);
+        file.setReadable(false, false);
+        file.setWritable(false, false);
     }
 }

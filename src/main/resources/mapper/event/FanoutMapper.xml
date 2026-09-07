@@ -66,4 +66,12 @@
               and content_id = #{contentId}
         )
     </insert>
+
+    <insert id="insertFeedEntry" databaseId="postgresql">
+        insert into user_feed_entries (
+            user_id, content_id, author_user_id, source_event_id, score
+        )
+        values (#{userId}, #{contentId}, #{authorUserId}, #{sourceEventId}, #{score})
+        on conflict do nothing
+    </insert>
 </mapper>

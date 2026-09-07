@@ -11,7 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @ConditionalOnProperty(name = "flower-show.messaging.kafka.enabled", havingValue = "true")
@@ -22,11 +25,13 @@ public class OutboxKafkaPublishOperation {
     private final ObjectMapper objectMapper;
     private final String domainTopic;
     private final int maxRetries;
+    private final TransactionTemplate processingTransaction;
 
     public OutboxKafkaPublishOperation(
             OutboxEventMapper outboxEventMapper,
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager,
             @Value("${flower-show.messaging.kafka.domain-topic:flower-show.domain-events.v1}") String domainTopic,
             @Value("${flower-show.events.outbox.max-retries:10}") int maxRetries
     ) {
@@ -35,6 +40,8 @@ public class OutboxKafkaPublishOperation {
         this.objectMapper = objectMapper;
         this.domainTopic = domainTopic;
         this.maxRetries = Math.max(1, maxRetries);
+        this.processingTransaction = new TransactionTemplate(transactionManager);
+        this.processingTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
     }
 
     @Transactional
@@ -46,10 +53,22 @@ public class OutboxKafkaPublishOperation {
 
         OutboxEventRecord row = rows.get(0);
         try {
-            EventEnvelope event = row.toEnvelope(objectMapper);
-            String value = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send(domainTopic, event.partitionKey(), value).get(30, TimeUnit.SECONDS);
-            outboxEventMapper.markProcessed(row.id());
+            // Savepoint around the publish step: keeps the markRetry bookkeeping
+            // usable even when a statement aborts the PostgreSQL transaction.
+            processingTransaction.execute(status -> {
+                try {
+                    EventEnvelope event = row.toEnvelope(objectMapper);
+                    String value = objectMapper.writeValueAsString(event);
+                    kafkaTemplate.send(domainTopic, event.partitionKey(), value).get(30, TimeUnit.SECONDS);
+                    outboxEventMapper.markProcessed(row.id());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while publishing outbox event.", e);
+                } catch (Exception e) {
+                    throw new IllegalStateException("Cannot publish outbox event.", e);
+                }
+                return null;
+            });
         } catch (Exception e) {
             markRetry(row.id(), e);
         }

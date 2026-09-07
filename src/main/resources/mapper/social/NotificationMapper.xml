@@ -64,9 +64,13 @@
         where receiver_user_id = #{userId} and read_at is null
     </update>
 
-    <update id="resetUnreadCount">
+    <update id="decrementUnreadCountBy">
         update notification_unread_stats
-        set unread_count = 0, updated_at = current_timestamp
+        set unread_count = case
+                when unread_count &gt; #{delta} then unread_count - #{delta}
+                else 0
+            end,
+            updated_at = current_timestamp
         where user_id = #{userId}
     </update>
 </mapper>

@@ -97,11 +97,14 @@ public class ChatWebSocketGateway implements SmartLifecycle {
                                     );
                         }
                     });
-            serverChannel = bootstrap.bind(properties.port()).syncUninterruptibly().channel();
+            serverChannel = bootstrap.bind(properties.host(), properties.port())
+                    .syncUninterruptibly()
+                    .channel();
             localPort = ((InetSocketAddress) serverChannel.localAddress()).getPort();
             running = true;
             log.info(
-                    "Chat WebSocket gateway listening on ws://0.0.0.0:{}{}",
+                    "Chat WebSocket gateway listening on ws://{}:{}{}",
+                    properties.host(),
                     localPort,
                     properties.path()
             );

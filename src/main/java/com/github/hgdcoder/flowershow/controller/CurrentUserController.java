@@ -104,9 +104,12 @@ public class CurrentUserController {
     @PostMapping("/notifications/read-all")
     public Map<String, Object> markAllNotificationsRead(@AuthenticationPrincipal Jwt jwt) {
         String userId = AuthenticatedUser.userId(jwt);
+        int changedCount = notificationService.markAllRead(userId);
+        // Read the counter back instead of assuming 0: a notification can be
+        // inserted concurrently with this call and remain unread.
         return Map.of(
-                "changedCount", notificationService.markAllRead(userId),
-                "unreadCount", 0
+                "changedCount", changedCount,
+                "unreadCount", notificationService.unreadCount(userId)
         );
     }
 

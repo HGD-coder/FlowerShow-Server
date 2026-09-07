@@ -42,7 +42,7 @@ public class NotificationWriter {
 
         String notificationId = deterministicId("ntf_", eventId + ":" + type + ":" + receiverUserId);
         String payloadJson = serialize(payload);
-        notificationMapper.insertNotification(new NotificationInsert(
+        int inserted = notificationMapper.insertNotification(new NotificationInsert(
                 notificationId,
                 receiverUserId,
                 actorUserId,
@@ -54,11 +54,14 @@ public class NotificationWriter {
                 dedupeKey,
                 payloadJson
         ));
-
-        int updated = notificationMapper.incrementUnreadCount(receiverUserId);
-        if (updated == 0) {
-            notificationMapper.insertUnreadCountIfAbsent(receiverUserId);
+        if (inserted == 0) {
+            // Lost a race against a concurrent writer with the same dedupe key.
+            return false;
         }
+
+        // Ensure the stats row exists first (conflict-safe), then increment.
+        notificationMapper.insertUnreadCountIfAbsent(receiverUserId);
+        notificationMapper.incrementUnreadCount(receiverUserId);
 
         enqueueDeviceDeliveries(notificationId, receiverUserId);
         return true;

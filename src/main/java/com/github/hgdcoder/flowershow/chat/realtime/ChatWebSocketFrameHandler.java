@@ -76,6 +76,11 @@ final class ChatWebSocketFrameHandler extends SimpleChannelInboundHandler<WebSoc
     }
 
     private void acceptAck(ChannelHandlerContext context, String text) {
+        // ACK frames confirm *delivery* of a realtime frame, not that the user
+        // has read the message, so they deliberately do not update read
+        // receipts — the REST mark-read API owns that state. Only the frame
+        // shape is validated here so malformed traffic is rejected early;
+        // consuming acks (e.g. delivery tracking) is future work.
         try {
             JsonNode root = objectMapper.readTree(text);
             JsonNode type = root == null ? null : root.get("type");

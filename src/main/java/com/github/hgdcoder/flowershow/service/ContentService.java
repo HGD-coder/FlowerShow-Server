@@ -36,7 +36,7 @@ public class ContentService {
     }
 
     public List<CardItemDto> feed(int page, int pageSize, String viewerUserId) {
-        return paginate(repository.findAllFeedItems(viewerUserId), page, pageSize);
+        return repository.findFeedPage(viewerUserId, offsetOf(page, pageSize), limitOf(pageSize));
     }
 
     public List<VideoCardDto> videos(int page, int pageSize) {
@@ -44,7 +44,7 @@ public class ContentService {
     }
 
     public List<VideoCardDto> videos(int page, int pageSize, String viewerUserId) {
-        return paginate(repository.findAllVideos(viewerUserId), page, pageSize);
+        return repository.findVideoPage(viewerUserId, offsetOf(page, pageSize), limitOf(pageSize));
     }
 
     public List<CardItemDto> userContent(String userId) {
@@ -76,6 +76,10 @@ public class ContentService {
     }
 
     public List<String> recommendWords(String id) {
+        // Only published, public content may expose its recommend words.
+        if (repository.countPublishedPublicContent(id) == 0) {
+            return List.of();
+        }
         return repository.findById(id)
                 .map(this::recommendWordsFor)
                 .orElse(List.of());
@@ -91,14 +95,15 @@ public class ContentService {
         return List.of();
     }
 
-    private static <T> List<T> paginate(List<T> items, int page, int pageSize) {
+    private static int offsetOf(int page, int pageSize) {
         int safePage = Math.max(1, page);
-        int safePageSize = Math.min(50, Math.max(1, pageSize));
-        int from = (safePage - 1) * safePageSize;
-        if (from >= items.size()) {
-            return List.of();
-        }
-        int to = Math.min(from + safePageSize, items.size());
-        return items.subList(from, to);
+        int safePageSize = limitOf(pageSize);
+        // Compute in long to avoid int overflow for huge page numbers.
+        long offsetValue = (long) (safePage - 1) * safePageSize;
+        return (int) Math.min(Integer.MAX_VALUE, offsetValue);
+    }
+
+    private static int limitOf(int pageSize) {
+        return Math.min(50, Math.max(1, pageSize));
     }
 }

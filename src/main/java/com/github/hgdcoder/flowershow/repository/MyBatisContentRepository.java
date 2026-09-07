@@ -8,7 +8,8 @@ import com.github.hgdcoder.flowershow.model.ImageCardDto;
 import com.github.hgdcoder.flowershow.model.ProfileContentTab;
 import com.github.hgdcoder.flowershow.model.VideoCardDto;
 import com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMapper;
-import com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMediaAssetRow;
+import com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMapper.ContentAssetRow;
+import com.github.hgdcoder.flowershow.persistence.mapper.content.ContentMapper.ContentTagRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.content.ContentRow;
 import com.github.hgdcoder.flowershow.persistence.mapper.content.NewContentCommand;
 import com.github.hgdcoder.flowershow.persistence.mapper.content.NewContentMediaAsset;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @Repository
@@ -51,6 +53,11 @@ public class MyBatisContentRepository implements ContentRepository {
     }
 
     @Override
+    public List<CardItemDto> findFeedPage(String viewerUserId, int offset, int limit) {
+        return toCards(contentMapper.findFeedPage(offset, limit), viewerUserId);
+    }
+
+    @Override
     public List<VideoCardDto> findAllVideos(String viewerUserId) {
         return findAllFeedItems(viewerUserId).stream()
                 .filter(VideoCardDto.class::isInstance)
@@ -59,7 +66,33 @@ public class MyBatisContentRepository implements ContentRepository {
     }
 
     @Override
+    public List<VideoCardDto> findVideoPage(String viewerUserId, int offset, int limit) {
+        return toCards(contentMapper.findVideoPage(offset, limit), viewerUserId).stream()
+                .filter(VideoCardDto.class::isInstance)
+                .map(VideoCardDto.class::cast)
+                .toList();
+    }
+
+    @Override
+    public long countPublishedPublicContent(String id) {
+        return contentMapper.countPublishedPublicContent(id);
+    }
+
+    @Override
+    public List<CardItemDto> search(String query, String viewerUserId, int limit) {
+        if (query == null || query.isBlank() || limit <= 0) {
+            return List.of();
+        }
+        return toCards(contentMapper.search(query, limit), viewerUserId);
+    }
+
+    @Override
     public List<CardItemDto> findUserContent(String userId, String viewerUserId) {
+        String profileVisibility = contentMapper.findProfileVisibility(userId);
+        String viewer = viewerUserId == null ? "" : viewerUserId.trim();
+        if (!userId.equals(viewer) && "private".equalsIgnoreCase(profileVisibility)) {
+            throw new ResponseStatusException(FORBIDDEN, "This profile is private.");
+        }
         return toCards(contentMapper.findUserContent(userId), viewerUserId);
     }
 
@@ -110,9 +143,7 @@ public class MyBatisContentRepository implements ContentRepository {
         assertUserExists(request.authorUserId());
 
         String id = "cnt_" + UUID.randomUUID().toString().replace("-", "");
-        String visibility = request.visibility() == null || request.visibility().isBlank()
-                ? "public"
-                : request.visibility().trim();
+        String visibility = normalizeVisibility(request.visibility());
         long publishTime = Instant.now().getEpochSecond();
 
         contentMapper.insertContent(new NewContentCommand(
@@ -141,16 +172,43 @@ public class MyBatisContentRepository implements ContentRepository {
     }
 
     private List<CardItemDto> toCards(List<ContentRow> rows, String viewerUserId) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
         Map<String, ViewerState> viewerStates = viewerStates(rows, viewerUserId);
+        List<String> contentIds = rows.stream().map(ContentRow::id).distinct().toList();
+
+        Map<String, List<String>> tagsById = new HashMap<>();
+        for (ContentTagRow tag : contentMapper.findTagsByContentIds(contentIds)) {
+            tagsById.computeIfAbsent(tag.contentId(), ignored -> new ArrayList<>()).add(tag.tag());
+        }
+        Map<String, List<String>> wordsById = new HashMap<>();
+        for (ContentTagRow word : contentMapper.findRecommendWordsByContentIds(contentIds)) {
+            wordsById.computeIfAbsent(word.contentId(), ignored -> new ArrayList<>()).add(word.tag());
+        }
+        Map<String, List<ContentAssetRow>> assetsById = new HashMap<>();
+        for (ContentAssetRow asset : contentMapper.findAssetsByContentIds(contentIds)) {
+            assetsById.computeIfAbsent(asset.contentId(), ignored -> new ArrayList<>()).add(asset);
+        }
+
         return rows.stream()
-                .map(row -> toCard(row, viewerStates.getOrDefault(row.id(), ViewerState.NONE)))
+                .map(row -> toCard(
+                        row,
+                        viewerStates.getOrDefault(row.id(), ViewerState.NONE),
+                        tagsById.getOrDefault(row.id(), List.of()),
+                        wordsById.getOrDefault(row.id(), List.of()),
+                        assetsById.getOrDefault(row.id(), List.of())
+                ))
                 .toList();
     }
 
-    private CardItemDto toCard(ContentRow row, ViewerState viewerState) {
-        List<String> tags = contentMapper.findTags(row.id());
-        List<String> recommendWords = contentMapper.findRecommendWords(row.id());
-
+    private CardItemDto toCard(
+            ContentRow row,
+            ViewerState viewerState,
+            List<String> tags,
+            List<String> recommendWords,
+            List<ContentAssetRow> assets
+    ) {
         return switch (row.type()) {
             case "video" -> new VideoCardDto(
                     "video",
@@ -158,9 +216,9 @@ public class MyBatisContentRepository implements ContentRepository {
                     row.title(),
                     row.nickname(),
                     row.avatarUrl(),
-                    firstAsset(row.id(), "video"),
+                    firstProgressiveUrl(assets, "video"),
                     row.coverUrl(),
-                    firstAsset(row.id(), "music"),
+                    firstUrl(assets, "music"),
                     row.likeCount(),
                     row.commentCount(),
                     row.favoriteCount(),
@@ -172,8 +230,8 @@ public class MyBatisContentRepository implements ContentRepository {
                     row.location(),
                     row.sourceUrl(),
                     row.publishTime(),
-                    qualityUrls(row.id()),
-                    hlsUrl(row.id()),
+                    qualityUrls(assets),
+                    hlsUrl(assets),
                     row.authorUserId(),
                     viewerState.liked(),
                     viewerState.favorited()
@@ -183,7 +241,7 @@ public class MyBatisContentRepository implements ContentRepository {
                     row.id(),
                     row.title(),
                     row.nickname(),
-                    firstAsset(row.id(), "image"),
+                    firstUrl(assets, "image"),
                     row.likeCount(),
                     row.commentCount(),
                     row.authorUserId(),
@@ -196,8 +254,8 @@ public class MyBatisContentRepository implements ContentRepository {
                     row.title(),
                     row.nickname(),
                     row.avatarUrl(),
-                    albumSlides(row.id()),
-                    firstAsset(row.id(), "music"),
+                    albumSlides(assets),
+                    firstUrl(assets, "music"),
                     row.likeCount(),
                     row.commentCount(),
                     row.shareCount(),
@@ -266,39 +324,68 @@ public class MyBatisContentRepository implements ContentRepository {
         return List.copyOf(ordered);
     }
 
-    private String firstAsset(String contentId, String kind) {
-        ContentMediaAssetRow asset = contentMapper.findFirstAsset(
-                contentId,
-                kind,
-                "video".equals(kind)
-        );
-        return asset == null ? "" : resolveMediaUrl(asset.url(), asset.storageKey());
+    private String firstUrl(List<ContentAssetRow> assets, String kind) {
+        return assets.stream()
+                .filter(asset -> kind.equals(asset.kind()))
+                .map(asset -> resolveMediaUrl(asset.url(), asset.storageKey()))
+                .findFirst()
+                .orElse("");
     }
 
-    private String hlsUrl(String contentId) {
-        ContentMediaAssetRow asset = contentMapper.findHlsAsset(contentId);
-        return asset == null ? null : resolveMediaUrl(asset.url(), asset.storageKey());
+    private String firstProgressiveUrl(List<ContentAssetRow> assets, String kind) {
+        return assets.stream()
+                .filter(asset -> kind.equals(asset.kind()))
+                .filter(asset -> asset.deliveryType() == null
+                        || "progressive".equalsIgnoreCase(asset.deliveryType()))
+                .map(asset -> resolveMediaUrl(asset.url(), asset.storageKey()))
+                .findFirst()
+                .orElse("");
     }
 
-    private Map<String, String> qualityUrls(String contentId) {
-        List<ContentMediaAssetRow> assets = contentMapper.findQualityAssets(contentId);
-        if (assets.isEmpty()) {
-            return null;
+    private String hlsUrl(List<ContentAssetRow> assets) {
+        ContentAssetRow first = null;
+        ContentAssetRow auto = null;
+        for (ContentAssetRow asset : assets) {
+            if (!"video".equals(asset.kind()) || !"hls".equalsIgnoreCase(asset.deliveryType())) {
+                continue;
+            }
+            if (first == null) {
+                first = asset;
+            }
+            if ("auto".equals(asset.quality()) && auto == null) {
+                auto = asset;
+            }
         }
+        ContentAssetRow chosen = auto != null ? auto : first;
+        return chosen == null ? null : resolveMediaUrl(chosen.url(), chosen.storageKey());
+    }
+
+    private Map<String, String> qualityUrls(List<ContentAssetRow> assets) {
         Map<String, String> urls = new LinkedHashMap<>();
-        for (ContentMediaAssetRow asset : assets) {
+        for (ContentAssetRow asset : assets) {
+            if (!"video".equals(asset.kind()) || asset.quality() == null) {
+                continue;
+            }
+            if (asset.deliveryType() != null && !"progressive".equalsIgnoreCase(asset.deliveryType())) {
+                continue;
+            }
             urls.put(asset.quality(), resolveMediaUrl(asset.url(), asset.storageKey()));
         }
-        return urls;
+        return urls.isEmpty() ? null : urls;
     }
 
-    private List<AlbumSlideDto> albumSlides(String contentId) {
-        return contentMapper.findAlbumAssets(contentId).stream()
-                .map(asset -> new AlbumSlideDto(
-                        "video".equals(asset.kind()) ? AlbumSlideDto.TYPE_VIDEO : AlbumSlideDto.TYPE_IMAGE,
-                        resolveMediaUrl(asset.url(), asset.storageKey())
-                ))
-                .toList();
+    private List<AlbumSlideDto> albumSlides(List<ContentAssetRow> assets) {
+        List<AlbumSlideDto> slides = new ArrayList<>();
+        for (ContentAssetRow asset : assets) {
+            if (!"image".equals(asset.kind()) && !"video".equals(asset.kind())) {
+                continue;
+            }
+            slides.add(new AlbumSlideDto(
+                    "video".equals(asset.kind()) ? AlbumSlideDto.TYPE_VIDEO : AlbumSlideDto.TYPE_IMAGE,
+                    resolveMediaUrl(asset.url(), asset.storageKey())
+            ));
+        }
+        return List.copyOf(slides);
     }
 
     private String resolveMediaUrl(String url, String storageKey) {
@@ -312,6 +399,16 @@ public class MyBatisContentRepository implements ContentRepository {
         String normalized = type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
         if (!List.of("video", "image", "album").contains(normalized)) {
             throw new ResponseStatusException(BAD_REQUEST, "type must be video, image, or album.");
+        }
+        return normalized;
+    }
+
+    private String normalizeVisibility(String visibility) {
+        String normalized = visibility == null || visibility.isBlank()
+                ? "public"
+                : visibility.trim().toLowerCase(Locale.ROOT);
+        if (!List.of("public", "private").contains(normalized)) {
+            throw new ResponseStatusException(BAD_REQUEST, "visibility must be public or private.");
         }
         return normalized;
     }

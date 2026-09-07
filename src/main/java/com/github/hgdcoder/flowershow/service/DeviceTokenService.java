@@ -35,7 +35,7 @@ public class DeviceTokenService {
         String id;
         if (existing == null) {
             id = deterministicId(pushProvider, token);
-            deviceTokenMapper.insertDevice(
+            int inserted = deviceTokenMapper.insertDevice(
                     id,
                     userId,
                     token,
@@ -46,22 +46,45 @@ public class DeviceTokenService {
                     deviceBrand,
                     appPackage
             );
+            if (inserted == 0) {
+                // A concurrent registration claimed the unique (push_provider, token)
+                // slot; fall back to the update path instead of failing with 500.
+                existing = deviceTokenMapper.findExisting(pushProvider.value(), token);
+                if (existing == null) {
+                    throw new IllegalStateException("Device token registration conflict could not be resolved.");
+                }
+                id = existing.id();
+                updateExisting(existing, id, userId, platform, deviceName, recipientType, deviceBrand, appPackage);
+            }
         } else {
             id = existing.id();
-            if (!userId.equals(existing.userId())) {
-                deviceTokenMapper.deletePendingDeliveries(id);
-            }
-            deviceTokenMapper.updateDevice(
-                    id,
-                    userId,
-                    platform,
-                    deviceName,
-                    recipientType,
-                    deviceBrand,
-                    appPackage
-            );
+            updateExisting(existing, id, userId, platform, deviceName, recipientType, deviceBrand, appPackage);
         }
         return findById(userId, id);
+    }
+
+    private void updateExisting(
+            ExistingDevice existing,
+            String id,
+            String userId,
+            String platform,
+            String deviceName,
+            String recipientType,
+            String deviceBrand,
+            String appPackage
+    ) {
+        if (!userId.equals(existing.userId())) {
+            deviceTokenMapper.deletePendingDeliveries(id);
+        }
+        deviceTokenMapper.updateDevice(
+                id,
+                userId,
+                platform,
+                deviceName,
+                recipientType,
+                deviceBrand,
+                appPackage
+        );
     }
 
     public List<DeviceTokenDto> list(String userId) {

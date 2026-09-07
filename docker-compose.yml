@@ -40,6 +40,7 @@ services:
       POSTGRES_DB: flower_show
       POSTGRES_USER: flower_show
       POSTGRES_PASSWORD: flower_show
+      TZ: UTC
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -92,7 +93,7 @@ services:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9001:9001"
     volumes:
-      - D:/flower-show-data/minio:/data
+      - flower_show_minio_data:/data
 
   minio-init:
     image: minio/mc:latest
@@ -154,3 +155,4 @@ volumes:
   flower_show_postgres_data:
   flower_show_kafka_data:
   flower_show_ollama_data:
+  flower_show_minio_data:

@@ -74,4 +74,6 @@ public interface PushDeliveryMapper {
             @Param("claimOwner") String claimOwner,
             @Param("lastError") String lastError
     );
+
+    int deleteTerminalDeliveriesOlderThan(@Param("cutoff") Timestamp cutoff);
 }

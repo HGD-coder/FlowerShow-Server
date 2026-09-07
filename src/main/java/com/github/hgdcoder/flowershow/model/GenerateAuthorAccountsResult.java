@@ -7,7 +7,6 @@ public record GenerateAuthorAccountsResult(
         int created,
         int existing,
         int passwordUpdated,
-        String defaultPassword,
         List<AccountDto> accounts
 ) {
 }

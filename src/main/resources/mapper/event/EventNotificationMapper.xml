@@ -22,6 +22,18 @@
         )
     </insert>
 
+    <insert id="insertNotification" databaseId="postgresql">
+        insert into notifications (
+            id, receiver_user_id, actor_user_id, type, content_id, comment_id,
+            message, event_id, dedupe_key, payload_json
+        )
+        values (
+            #{id}, #{receiverUserId}, #{actorUserId}, #{type}, #{contentId}, #{commentId},
+            #{message}, #{eventId}, #{dedupeKey}, #{payloadJson}
+        )
+        on conflict do nothing
+    </insert>
+
     <update id="incrementUnreadCount">
         update notification_unread_stats
         set unread_count = unread_count + 1,
@@ -31,12 +43,18 @@
 
     <insert id="insertUnreadCountIfAbsent">
         insert into notification_unread_stats (user_id, unread_count)
-        select #{receiverUserId}, 1
+        select #{receiverUserId}, 0
         where not exists (
             select 1
             from notification_unread_stats
             where user_id = #{receiverUserId}
         )
+    </insert>
+
+    <insert id="insertUnreadCountIfAbsent" databaseId="postgresql">
+        insert into notification_unread_stats (user_id, unread_count)
+        values (#{receiverUserId}, 0)
+        on conflict do nothing
     </insert>
 
     <select id="findEnabledDeviceIds" resultType="java.lang.String">
@@ -55,5 +73,11 @@
             where notification_id = #{notificationId}
               and device_token_id = #{deviceId}
         )
+    </insert>
+
+    <insert id="insertDeliveryIfAbsent" databaseId="postgresql">
+        insert into notification_deliveries (id, notification_id, device_token_id)
+        values (#{deliveryId}, #{notificationId}, #{deviceId})
+        on conflict do nothing
     </insert>
 </mapper>

@@ -15,11 +15,24 @@ public interface ContentRepository {
         return findAllFeedItems(null);
     }
 
+    List<CardItemDto> findFeedPage(String viewerUserId, int offset, int limit);
+
     List<VideoCardDto> findAllVideos(String viewerUserId);
 
     default List<VideoCardDto> findAllVideos() {
         return findAllVideos(null);
     }
+
+    List<VideoCardDto> findVideoPage(String viewerUserId, int offset, int limit);
+
+    long countPublishedPublicContent(String id);
+
+    /**
+     * Keyword search over published public content, ordered by relevance desc.
+     * {@code query} is pre-normalized (trimmed, lowercase) and non-blank;
+     * implementations must not return more than {@code limit} items.
+     */
+    List<CardItemDto> search(String query, String viewerUserId, int limit);
 
     List<CardItemDto> findUserContent(String userId, String viewerUserId);
 

@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "flower-show.chat.websocket")
 public record ChatWebSocketProperties(
         boolean enabled,
+        String host,
         int port,
         String path,
         Duration idleTimeout,
@@ -15,6 +16,9 @@ public record ChatWebSocketProperties(
     public ChatWebSocketProperties {
         if (port < 0 || port > 65_535) {
             throw new IllegalArgumentException("Chat WebSocket port must be between 0 and 65535.");
+        }
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("Chat WebSocket host must not be blank.");
         }
         if (path == null || path.isBlank() || !path.startsWith("/")) {
             throw new IllegalArgumentException("Chat WebSocket path must start with '/'.");

@@ -23,10 +23,12 @@
         c.body, c.like_count, c.created_at
     </sql>
 
-    <select id="countContentById" resultType="long">
+    <select id="countPublishedPublicContent" resultType="long">
         select count(*)
         from content_items
         where id = #{contentId}
+          and status = 'published'
+          and visibility = 'public'
     </select>
 
     <select id="countUserById" resultType="long">

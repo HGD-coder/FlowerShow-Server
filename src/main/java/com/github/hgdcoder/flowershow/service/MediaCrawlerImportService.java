@@ -22,7 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
@@ -32,13 +33,18 @@ public class MediaCrawlerImportService {
 
     private final MediaCrawlerImportMapper importMapper;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate perLineTransaction;
 
-    public MediaCrawlerImportService(MediaCrawlerImportMapper importMapper, ObjectMapper objectMapper) {
+    public MediaCrawlerImportService(
+            MediaCrawlerImportMapper importMapper,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager
+    ) {
         this.importMapper = importMapper;
         this.objectMapper = objectMapper;
+        this.perLineTransaction = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
     public MediaCrawlerImportResult importJsonl(MediaCrawlerImportRequest request) {
         Path path = Paths.get(request.path()).toAbsolutePath().normalize();
         if (!Files.isRegularFile(path)) {
@@ -61,7 +67,13 @@ public class MediaCrawlerImportService {
                 counter.read++;
                 try {
                     JsonNode raw = objectMapper.readTree(trimmed);
-                    ImportAction action = importOne(raw, trimmed, request);
+                    // Each line commits (or rolls back) independently: PostgreSQL aborts
+                    // the whole transaction after the first failing statement, so a
+                    // per-line transaction is the only way the "skip bad lines" contract
+                    // can hold on both PostgreSQL and H2.
+                    ImportAction action = perLineTransaction.execute(
+                            status -> importOne(raw, trimmed, request)
+                    );
                     if (action == ImportAction.INSERTED) {
                         counter.inserted++;
                     } else if (action == ImportAction.UPDATED) {
@@ -100,7 +112,7 @@ public class MediaCrawlerImportService {
         upsertUser(authorId, raw);
 
         boolean exists = importMapper.countContentById(awemeId) > 0;
-        upsertContent(awemeId, authorId, raw, title, rawJson);
+        upsertContent(awemeId, authorId, raw, title, rawJson, request.effectiveAssetBaseUrl());
         upsertStats(awemeId, raw);
         replaceTags(awemeId, raw);
         replaceRecommendWords(awemeId, title);
@@ -173,7 +185,15 @@ public class MediaCrawlerImportService {
         }
     }
 
-    private void upsertContent(String contentId, String authorId, JsonNode raw, String title, String rawJson) {
+    private void upsertContent(
+            String contentId,
+            String authorId,
+            JsonNode raw,
+            String title,
+            String rawJson,
+            String assetBaseUrl
+    ) {
+        MediaReference cover = mediaReference(text(raw, "cover_url"), assetBaseUrl);
         upsertContent(
                 contentId,
                 authorId,
@@ -181,7 +201,7 @@ public class MediaCrawlerImportService {
                 title,
                 rawJson,
                 "video",
-                text(raw, "cover_url"),
+                cover == null ? null : cover.url(),
                 text(raw, "aweme_url"),
                 longValue(raw, "create_time")
         );
@@ -257,7 +277,10 @@ public class MediaCrawlerImportService {
         int order = 0;
         String coverUrl = text(raw, "cover_url");
         if (!isBlank(coverUrl)) {
-            insertMedia(contentId, "cover", new MediaReference(coverUrl, null), null, order++);
+            MediaReference cover = mediaReference(coverUrl, assetBaseUrl);
+            if (cover != null) {
+                insertMedia(contentId, "cover", cover, null, order++);
+            }
         }
 
         JsonNode qualityUrls = raw.get("quality_urls");

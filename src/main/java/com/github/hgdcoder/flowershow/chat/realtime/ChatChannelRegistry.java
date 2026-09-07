@@ -35,7 +35,11 @@ public class ChatChannelRegistry {
                 continue;
             }
             for (Channel channel : channels) {
-                if (channel.isActive()) {
+                // Skip channels whose outbound buffer is already saturated:
+                // realtime frames are best-effort by design and a slow consumer
+                // must catch up through the REST history API, so dropping beats
+                // letting the Netty outbound buffer grow without bound.
+                if (channel.isActive() && channel.isWritable()) {
                     channel.writeAndFlush(new TextWebSocketFrame(json));
                 }
             }

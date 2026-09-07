@@ -748,7 +748,9 @@ public class ChatService {
                 toIso(row.dissolvedAt()),
                 lastMessage,
                 row.unreadCount(),
-                toIso(row.updatedAt())
+                // Expose the same value the list is ordered by (activity time),
+                // so the DTO never disagrees with the cursor's sort key.
+                toIso(row.activityAt())
         );
     }
 
