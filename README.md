@@ -2,6 +2,12 @@
 
 REST backend for the Flower Show Android app.
 
+## System Architecture
+
+![System architecture diagram](docs/architecture/flower-show-server-architecture.visual-check.2048x1320.light.png)
+
+GitHub shows the static preview above. For the interactive version, [download the HTML file](docs/architecture/flower-show-server-architecture.html) and open it locally.
+
 ## Requirements
 
 - JDK 17+
