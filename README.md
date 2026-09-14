@@ -1,3 +1,5 @@
+**English** | [简体中文](README.zh-CN.md)
+
 # Flower Show Server
 
 REST backend for the Flower Show Android app.
